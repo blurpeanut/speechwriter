@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SpeechCraft · MOF AI Speech Writer</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --ink:       #0E1A2B;
+  --ink-mid:   #1E3347;
+  --ink-soft:  #4A6078;
+  --ink-mute:  #8EA3B6;
+  --rule:      #D8E3ED;
+  --bg:        #F3F7FA;
+  --surface:   #FFFFFF;
+  --surface2:  #EEF3F8;
+  --gold:      #B8860B;
+  --gold-lt:   #F5ECC8;
+  --gold-pale: #FDFAF0;
+  --sage:      #2D6A4F;
+  --sage-lt:   #D8EFDF;
+  --sage-pale: #F0FAF3;
+  --violet:    #5B3FA6;
+  --violet-lt: #E8E0F8;
+  --red:       #B91C1C;
+  --red-lt:    #FEE2E2;
+  --accent:    #1B4FD8;
+  --accent-lt: #DBEAFE;
+  --diff-add:  #D1FAE5;
+  --diff-add-border: #6EE7B7;
+  --diff-rem:  #FEE2E2;
+  --chat-w:    320px;
+  --serif: 'Cormorant Garamond', Georgia, serif;
+  --sans:  'Instrument Sans', system-ui, sans-serif;
+  --r: 10px; --r-sm: 6px;
+  --shadow: 0 1px 3px rgba(14,26,43,0.07), 0 4px 16px rgba(14,26,43,0.05);
+  --shadow-lg: 0 4px 24px rgba(14,26,43,0.1), 0 1px 4px rgba(14,26,43,0.06);
+}
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:var(--sans); background:var(--bg); color:var(--ink); min-height:100vh; font-size:14px; line-height:1.6; }
+
+/* ── HEADER ── */
+.hdr { background:var(--ink); height:60px; display:flex; align-items:center; justify-content:space-between; padding:0 36px; position:sticky; top:0; z-index:300; border-bottom:1px solid rgba(255,255,255,0.07); }
+.hdr-brand { display:flex; align-items:center; gap:14px; }
+.hdr-crest { width:34px; height:34px; background:linear-gradient(135deg,#2A5FD4 0%,#1B3FA0 100%); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; box-shadow:inset 0 1px 0 rgba(255,255,255,0.15); }
+.hdr-wordmark { font-family:var(--serif); font-size:22px; font-weight:500; color:#fff; letter-spacing:0.01em; line-height:1; }
+.hdr-sub { font-size:10px; color:rgba(255,255,255,0.4); letter-spacing:0.1em; text-transform:uppercase; margin-top:3px; }
+.hdr-right { display:flex; align-items:center; gap:12px; }
+.hdr-pill { background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12); color:rgba(255,255,255,0.55); font-size:10px; letter-spacing:0.07em; text-transform:uppercase; padding:4px 12px; border-radius:20px; }
+.hdr-user { width:28px; height:28px; border-radius:50%; background:var(--accent); display:flex; align-items:center; justify-content:center; color:#fff; font-size:11px; font-weight:600; }
+
+/* ── STEP RAIL ── */
+.rail { background:var(--surface); border-bottom:1px solid var(--rule); padding:0 36px; display:flex; align-items:center; height:52px; position:sticky; top:60px; z-index:200; box-shadow:0 1px 0 rgba(14,26,43,0.04); }
+.step { display:flex; align-items:center; gap:10px; padding:0 20px 0 0; cursor:pointer; user-select:none; color:var(--ink-mute); font-size:12.5px; font-weight:500; transition:color 0.2s; }
+.step+.step::before { content:''; display:inline-block; width:24px; height:1px; background:var(--rule); margin-right:20px; }
+.step-badge { width:22px; height:22px; border-radius:50%; border:1.5px solid currentColor; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:600; flex-shrink:0; transition:all 0.2s; }
+.step.active { color:var(--accent); }
+.step.active .step-badge { background:var(--accent); color:#fff; border-color:var(--accent); }
+.step.done { color:var(--sage); }
+.step.done .step-badge { background:var(--sage); color:#fff; border-color:var(--sage); }
+
+/* ── LAYOUT ── */
+.main { max-width:1080px; margin:0 auto; padding:32px 24px 64px; }
+.screen { display:none; }
+.screen.active { display:block; animation:rise 0.35s cubic-bezier(0.22,1,0.36,1); }
+@keyframes rise { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+
+/* ── CARD / FORM ── */
+.card { background:var(--surface); border:1px solid var(--rule); border-radius:var(--r); padding:24px; margin-bottom:14px; box-shadow:var(--shadow); }
+.card-label { font-size:10px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-mute); margin-bottom:18px; display:flex; align-items:center; gap:8px; }
+.card-label-dot { width:5px; height:5px; border-radius:50%; background:currentColor; opacity:0.5; }
+.sec-title { font-family:var(--serif); font-size:26px; font-weight:500; color:var(--ink); line-height:1.2; }
+.gold-rule { height:2px; background:linear-gradient(90deg,var(--accent) 0%,rgba(27,79,216,0) 100%); width:40px; border-radius:1px; margin:6px 0 20px; }
+.sec-desc { font-size:12.5px; color:var(--ink-soft); }
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; }
+.field { display:flex; flex-direction:column; gap:5px; }
+.field label { font-size:11px; font-weight:600; color:var(--ink-soft); letter-spacing:0.04em; text-transform:uppercase; }
+.field select, .field input[type=text], .field textarea { font-family:var(--sans); font-size:13.5px; padding:9px 12px; border:1px solid var(--rule); border-radius:var(--r-sm); background:var(--surface); color:var(--ink); transition:border-color 0.15s,box-shadow 0.15s; outline:none; -webkit-appearance:none; }
+.field select { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='7'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238EA3B6' fill='none' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 12px center; padding-right:32px; }
+.field select:focus, .field input[type=text]:focus, .field textarea:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(27,79,216,0.1); }
+.field textarea { resize:none; line-height:1.65; }
+.chip-row { display:flex; gap:6px; flex-wrap:wrap; }
+.chip { padding:6px 15px; border:1px solid var(--rule); border-radius:20px; font-size:12px; font-family:var(--sans); cursor:pointer; color:var(--ink-soft); background:var(--surface); transition:all 0.15s; font-weight:500; }
+.chip:hover { border-color:var(--accent); color:var(--accent); }
+.chip.on { background:var(--accent-lt); color:var(--accent); border-color:var(--accent); font-weight:600; }
+.upzone { border:1.5px dashed var(--rule); border-radius:var(--r-sm); padding:14px 16px; display:flex; align-items:center; gap:14px; margin-bottom:9px; background:var(--bg); cursor:pointer; transition:all 0.18s; }
+.upzone:hover { border-color:var(--accent); background:#EEF4FF; }
+.upzone.ok { border-color:var(--sage); background:var(--sage-pale); border-style:solid; }
+.up-icon { width:38px; height:38px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; }
+.up-info { flex:1; min-width:0; }
+.up-name { font-size:13px; font-weight:600; color:var(--ink); margin-bottom:1px; }
+.up-hint { font-size:11px; color:var(--ink-soft); }
+.up-file { font-size:11px; color:var(--sage); font-weight:500; display:none; margin-top:3px; }
+.upzone.ok .up-file { display:block; }
+.up-tag { font-size:10px; font-weight:600; letter-spacing:0.05em; padding:3px 9px; border-radius:20px; flex-shrink:0; }
+.tag-req { background:var(--red-lt); color:var(--red); }
+.tag-opt { background:var(--surface2); color:var(--ink-soft); border:1px solid var(--rule); }
+.tag-ok  { background:var(--sage-lt); color:var(--sage); }
+.kb-row { display:flex; gap:7px; flex-wrap:wrap; }
+.kb-pill { display:flex; align-items:center; gap:6px; padding:5px 12px; background:var(--sage-pale); border:1px solid #BBF7D0; border-radius:20px; font-size:11px; color:#1A5C37; font-weight:500; }
+.kb-dot { width:6px; height:6px; border-radius:50%; background:var(--sage); }
+.kb-pill.live { background:var(--gold-pale); border-color:#EAD06A; color:#7A5C00; }
+.kb-pill.live .kb-dot { background:var(--gold); }
+
+/* ── BUTTONS ── */
+.btn-primary { background:var(--accent); color:#fff; border:none; border-radius:var(--r-sm); padding:10px 22px; font-size:13px; font-weight:600; font-family:var(--sans); cursor:pointer; transition:all 0.15s; display:inline-flex; align-items:center; gap:7px; box-shadow:0 1px 2px rgba(27,79,216,0.2),inset 0 1px 0 rgba(255,255,255,0.1); }
+.btn-primary:hover { background:#1341B8; transform:translateY(-1px); box-shadow:0 4px 14px rgba(27,79,216,0.3); }
+.btn-secondary { background:var(--surface); color:var(--ink); border:1px solid var(--rule); border-radius:var(--r-sm); padding:10px 20px; font-size:13px; font-weight:500; font-family:var(--sans); cursor:pointer; transition:all 0.15s; display:inline-flex; align-items:center; gap:7px; }
+.btn-secondary:hover { border-color:var(--accent); color:var(--accent); }
+.btn-sage { background:var(--sage); color:#fff; border:none; border-radius:var(--r-sm); padding:10px 20px; font-size:13px; font-weight:600; font-family:var(--sans); cursor:pointer; transition:all 0.15s; display:inline-flex; align-items:center; gap:7px; }
+.btn-sage:hover { background:#1F5238; }
+.actions { display:flex; align-items:center; justify-content:space-between; margin-top:22px; padding-top:18px; border-top:1px solid var(--rule); }
+.step-hint { font-size:12px; color:var(--ink-mute); font-style:italic; }
+
+/* ── PROGRESS / GEN BAR ── */
+.progress-bar { display:flex; align-items:center; background:var(--surface); border:1px solid var(--rule); border-radius:var(--r); padding:12px 20px; margin-bottom:16px; gap:4px; box-shadow:var(--shadow); }
+.ps { display:flex; align-items:center; gap:7px; font-size:11.5px; font-weight:500; color:var(--ink-mute); flex:1; white-space:nowrap; }
+.ps.done { color:var(--sage); }
+.ps.active { color:var(--accent); }
+.ps-dot { width:18px; height:18px; border-radius:50%; border:1.5px solid currentColor; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; flex-shrink:0; }
+.ps.done .ps-dot { background:var(--sage); color:#fff; border-color:var(--sage); }
+.ps.active .ps-dot { background:var(--accent); color:#fff; border-color:var(--accent); }
+.ps-sep { width:20px; height:1px; background:var(--rule); flex-shrink:0; }
+.gen-bar { background:linear-gradient(90deg,#EEF4FF,#F0F5FF); border:1px solid #C7D9F7; border-radius:var(--r-sm); padding:12px 16px; display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+.pulse { display:flex; gap:4px; }
+.pulse span { width:6px; height:6px; border-radius:50%; background:var(--accent); animation:bob 1.2s ease-in-out infinite; }
+.pulse span:nth-child(2){animation-delay:0.15s} .pulse span:nth-child(3){animation-delay:0.3s}
+@keyframes bob { 0%,80%,100%{opacity:0.25;transform:scale(0.8)} 40%{opacity:1;transform:scale(1)} }
+
+/* ── TABS ── */
+.tab-row { display:flex; border-bottom:1px solid var(--rule); margin-bottom:18px; }
+.tab { padding:9px 18px; font-size:13px; font-weight:500; color:var(--ink-soft); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; transition:all 0.15s; }
+.tab:hover { color:var(--ink); }
+.tab.on { color:var(--accent); border-bottom-color:var(--accent); }
+
+/* ── OUTLINE ── */
+.ol-item { border-left:3px solid var(--accent-lt); padding:12px 14px; margin-bottom:9px; border-radius:0 var(--r-sm) var(--r-sm) 0; background:#F7FAFF; cursor:pointer; transition:all 0.15s; }
+.ol-item:hover { border-left-color:var(--accent); background:var(--accent-lt); }
+.ol-title { font-size:13px; font-weight:600; color:var(--ink); margin-bottom:4px; }
+.ol-sub { font-size:12px; color:var(--ink-soft); line-height:1.55; }
+.ol-actions { display:flex; gap:6px; margin-top:6px; }
+.ol-btn { font-size:10px; color:var(--ink-mute); background:none; border:none; cursor:pointer; padding:2px 7px; border-radius:4px; font-family:var(--sans); transition:all 0.15s; }
+.ol-btn:hover { background:var(--rule); color:var(--ink); }
+
+/* ── SPEECH AREA (full width when chat closed, narrower when open) ── */
+.speech-layout { display:grid; grid-template-columns:1fr; gap:14px; transition:grid-template-columns 0.3s ease; }
+.speech-layout.chat-open { grid-template-columns:1fr var(--chat-w); }
+
+/* ── VERSION STRIP ── */
+.ver-strip { display:flex; align-items:center; gap:0; padding:0 0 14px; margin-bottom:16px; border-bottom:1px solid var(--rule); overflow-x:auto; }
+.ver-chip { display:flex; align-items:center; gap:6px; padding:5px 12px; border-radius:20px; font-size:11px; font-weight:500; cursor:pointer; border:1px solid var(--rule); background:var(--surface2); color:var(--ink-soft); white-space:nowrap; transition:all 0.15s; flex-shrink:0; }
+.ver-chip+.ver-chip { margin-left:6px; }
+.ver-chip:hover { border-color:var(--accent); color:var(--accent); }
+.ver-chip.cur { background:var(--accent-lt); color:var(--accent); border-color:var(--accent); font-weight:600; }
+.ver-chip.cur .ver-dot { background:var(--accent); }
+.ver-dot { width:6px; height:6px; border-radius:50%; background:var(--ink-mute); flex-shrink:0; }
+.ver-label { font-size:10px; font-style:italic; color:var(--ink-mute); margin-left:10px; white-space:nowrap; }
+
+/* ── SPEECH DOCUMENT ── */
+.speech-doc { font-family:var(--serif); font-size:16.5px; line-height:2; color:var(--ink); }
+.speech-doc p { margin-bottom:16px; position:relative; border-radius:4px; transition:background 0.2s; }
+.speech-doc p:hover { background:rgba(27,79,216,0.03); }
+.speech-doc p.diff-add { background:var(--diff-add); border-left:3px solid var(--diff-add-border); padding-left:10px; border-radius:0 4px 4px 0; }
+.speech-doc p.diff-add::before { content:'revised'; font-family:var(--sans); font-size:9px; font-weight:600; color:var(--sage); letter-spacing:0.06em; text-transform:uppercase; position:absolute; top:-16px; left:0; }
+.speech-doc strong { font-weight:600; font-style:italic; }
+
+/* ── INLINE CITE MARKS ── */
+.cite { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; border-radius:50%; font-size:8px; font-weight:700; font-family:var(--sans); cursor:pointer; vertical-align:super; margin-left:1px; transition:transform 0.15s; }
+.cite:hover { transform:scale(1.25); }
+.cite-pub  { background:var(--sage-lt);   color:var(--sage); }
+.cite-priv { background:var(--violet-lt); color:var(--violet); }
+.cite-live { background:var(--gold-lt);   color:var(--gold); }
+
+/* ── TEXT SELECTION POPOVER ── */
+#sel-popover { position:fixed; z-index:500; background:var(--ink); border-radius:8px; padding:6px 6px; display:none; flex-direction:row; gap:4px; box-shadow:var(--shadow-lg); animation:poprise 0.15s ease; }
+@keyframes poprise { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
+.pop-btn { background:rgba(255,255,255,0.1); border:none; color:#fff; font-family:var(--sans); font-size:11px; font-weight:500; padding:5px 10px; border-radius:5px; cursor:pointer; white-space:nowrap; transition:background 0.12s; }
+.pop-btn:hover { background:rgba(255,255,255,0.2); }
+.pop-btn.pop-primary { background:var(--accent); }
+.pop-btn.pop-primary:hover { background:#1341B8; }
+.pop-arrow { position:absolute; bottom:-5px; left:50%; transform:translateX(-50%); width:10px; height:5px; overflow:hidden; }
+.pop-arrow::after { content:''; display:block; width:8px; height:8px; background:var(--ink); transform:rotate(45deg) translate(-4px,-4px); }
+
+/* ── CHAT PANEL ── */
+.chat-panel { background:var(--surface); border:1px solid var(--rule); border-radius:var(--r); display:flex; flex-direction:column; height:calc(100vh - 160px); position:sticky; top:128px; box-shadow:var(--shadow); overflow:hidden; }
+.chat-header { padding:14px 16px; border-bottom:1px solid var(--rule); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.chat-title { font-size:12px; font-weight:600; color:var(--ink); display:flex; align-items:center; gap:8px; }
+.chat-live-dot { width:7px; height:7px; border-radius:50%; background:var(--sage); animation:blink 2s ease-in-out infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.chat-close { width:24px; height:24px; border:none; background:var(--surface2); border-radius:50%; cursor:pointer; font-size:13px; color:var(--ink-soft); display:flex; align-items:center; justify-content:center; transition:all 0.15s; }
+.chat-close:hover { background:var(--red-lt); color:var(--red); }
+.chat-context-bar { padding:8px 12px; background:var(--gold-pale); border-bottom:1px solid #EAD06A; font-size:10.5px; color:#7A5C00; display:flex; align-items:center; gap:6px; flex-shrink:0; }
+.chat-msgs { flex:1; overflow-y:auto; padding:14px 14px; display:flex; flex-direction:column; gap:12px; }
+.chat-msgs::-webkit-scrollbar { width:4px; }
+.chat-msgs::-webkit-scrollbar-thumb { background:var(--rule); border-radius:2px; }
+.msg { max-width:100%; }
+.msg-user { align-self:flex-end; }
+.msg-user .msg-bubble { background:var(--accent); color:#fff; border-radius:12px 12px 3px 12px; font-size:12.5px; padding:9px 13px; line-height:1.5; }
+.msg-ai .msg-bubble { background:var(--surface2); color:var(--ink); border-radius:12px 12px 12px 3px; font-size:12.5px; padding:9px 13px; line-height:1.5; border:1px solid var(--rule); }
+.msg-ai .msg-meta { font-size:10px; color:var(--ink-mute); margin-top:5px; display:flex; align-items:center; gap:6px; }
+.msg-change-pill { display:inline-flex; align-items:center; gap:4px; background:var(--diff-add); border:1px solid var(--diff-add-border); color:var(--sage); font-size:10px; font-weight:600; padding:2px 8px; border-radius:20px; }
+.msg-undo { background:none; border:1px solid var(--rule); color:var(--ink-soft); font-size:10px; font-family:var(--sans); padding:2px 8px; border-radius:4px; cursor:pointer; transition:all 0.15s; }
+.msg-undo:hover { border-color:var(--red); color:var(--red); }
+.msg-typing .msg-bubble { background:var(--surface2); border:1px solid var(--rule); border-radius:12px 12px 12px 3px; padding:10px 14px; }
+
+/* ── QUICK PROMPTS ── */
+.quick-prompts { padding:10px 12px; border-top:1px solid var(--rule); display:flex; gap:5px; flex-wrap:wrap; flex-shrink:0; background:var(--bg); }
+.qp { font-size:10.5px; padding:4px 10px; border:1px solid var(--rule); border-radius:20px; background:var(--surface); color:var(--ink-soft); cursor:pointer; font-family:var(--sans); font-weight:500; transition:all 0.15s; white-space:nowrap; }
+.qp:hover { border-color:var(--accent); color:var(--accent); }
+
+/* ── CHAT INPUT ── */
+.chat-input-area { padding:10px 12px; border-top:1px solid var(--rule); display:flex; gap:8px; align-items:flex-end; flex-shrink:0; }
+.chat-input { flex:1; font-family:var(--sans); font-size:12.5px; padding:8px 12px; border:1px solid var(--rule); border-radius:8px; resize:none; outline:none; line-height:1.5; color:var(--ink); background:var(--surface); transition:border-color 0.15s; max-height:80px; overflow-y:auto; }
+.chat-input:focus { border-color:var(--accent); box-shadow:0 0 0 2px rgba(27,79,216,0.08); }
+.chat-send { width:32px; height:32px; background:var(--accent); border:none; border-radius:7px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.15s; flex-shrink:0; }
+.chat-send:hover { background:#1341B8; }
+.chat-send svg { width:14px; height:14px; }
+
+/* ── OPEN CHAT BUTTON ── */
+.open-chat-btn { display:inline-flex; align-items:center; gap:7px; background:var(--surface); border:1px solid var(--rule); border-radius:var(--r-sm); padding:8px 14px; font-size:12px; font-weight:500; font-family:var(--sans); color:var(--ink-soft); cursor:pointer; transition:all 0.15s; }
+.open-chat-btn:hover { border-color:var(--accent); color:var(--accent); }
+.open-chat-btn .chat-badge { background:var(--accent); color:#fff; font-size:9px; font-weight:700; width:16px; height:16px; border-radius:50%; display:flex; align-items:center; justify-content:center; }
+
+/* ── CITE PANEL (outline) ── */
+.cite-panel { background:var(--surface); border:1px solid var(--rule); border-radius:var(--r); padding:16px; position:sticky; top:128px; box-shadow:var(--shadow); }
+.cite-head { font-size:10px; font-weight:600; color:var(--ink-mute); letter-spacing:0.1em; text-transform:uppercase; margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+.cite-count { background:var(--accent-lt); color:var(--accent); font-size:9px; padding:2px 7px; border-radius:20px; font-weight:700; }
+.cite-item { padding:9px 0; border-bottom:1px solid var(--rule); }
+.cite-item:last-child { border-bottom:none; }
+.ci-row { display:flex; align-items:center; gap:6px; margin-bottom:3px; }
+.ci-num { width:16px; height:16px; border-radius:50%; font-size:8px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.ci-src { font-size:11px; font-weight:600; color:var(--ink); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ci-tag { font-size:9px; padding:2px 6px; border-radius:20px; font-weight:600; flex-shrink:0; }
+.t-pub  { background:var(--sage-lt);   color:var(--sage); }
+.t-priv { background:var(--violet-lt); color:var(--violet); }
+.t-live { background:var(--gold-lt);   color:var(--gold); }
+.ci-excerpt { font-size:11px; color:var(--ink-soft); line-height:1.45; margin-bottom:3px; }
+.ci-meta { font-size:10px; color:var(--ink-mute); }
+.score-hi { color:var(--sage); } .score-mid { color:var(--gold); } .score-lo { color:var(--red); }
+.warn-pill { background:var(--red-lt); color:var(--red); font-size:9px; padding:2px 6px; border-radius:4px; margin-top:3px; display:inline-block; }
+.src-break { margin-top:14px; padding-top:12px; border-top:1px solid var(--rule); }
+.src-break-head { font-size:10px; font-weight:600; color:var(--ink-mute); margin-bottom:9px; text-transform:uppercase; letter-spacing:0.08em; }
+.src-row { display:flex; align-items:center; gap:7px; font-size:10.5px; margin-bottom:6px; }
+.src-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.src-label { color:var(--ink-soft); width:64px; flex-shrink:0; }
+.src-bar { flex:1; height:4px; background:var(--surface2); border-radius:2px; overflow:hidden; }
+.src-fill { height:100%; border-radius:2px; }
+.src-pct { font-weight:600; min-width:28px; text-align:right; }
+
+/* ── META BAR (speech header) ── */
+.meta-bar { display:flex; align-items:center; gap:16px; margin-bottom:20px; padding-bottom:16px; border-bottom:1px solid var(--rule); flex-wrap:wrap; }
+.meta-item { font-size:11.5px; color:var(--ink-soft); display:flex; align-items:center; gap:5px; }
+.meta-item strong { color:var(--ink); font-weight:600; }
+.meta-sep { width:3px; height:3px; border-radius:50%; background:var(--rule); }
+.speaker-tag { display:inline-flex; align-items:center; gap:8px; background:var(--surface2); border:1px solid var(--rule); border-radius:20px; padding:4px 12px 4px 6px; font-size:12px; color:var(--ink); }
+.speaker-avatar { width:22px; height:22px; border-radius:50%; background:var(--accent); display:flex; align-items:center; justify-content:center; color:#fff; font-size:9px; font-weight:700; }
+
+/* ── TOAST ── */
+#toast { display:none; position:fixed; bottom:28px; right:28px; background:var(--sage); color:#fff; padding:11px 20px; border-radius:var(--r-sm); font-size:13px; font-weight:500; box-shadow:var(--shadow-lg); z-index:999; animation:rise 0.3s ease; }
+
+/* scrollbar */
+::-webkit-scrollbar{width:5px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:var(--rule);border-radius:3px}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="hdr">
+  <div class="hdr-brand">
+    <div class="hdr-crest">✍</div>
+    <div>
+      <div class="hdr-wordmark">SpeechCraft</div>
+      <div class="hdr-sub">Ministry of Finance · AI Speech Writer</div>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <div class="hdr-pill">Beta</div>
+    <div class="hdr-user">LW</div>
+  </div>
+</header>
+
+<!-- STEP RAIL -->
+<nav class="rail">
+  <div class="step done" id="pill1" onclick="goTo(1)"><div class="step-badge">✓</div>Speech brief</div>
+  <div class="step active" id="pill2" onclick="goTo(2)"><div class="step-badge">2</div>Upload documents</div>
+  <div class="step" id="pill3" onclick="goTo(3)"><div class="step-badge">3</div>Generate &amp; review</div>
+</nav>
+
+<!-- SELECTION POPOVER -->
+<div id="sel-popover">
+  <button class="pop-btn pop-primary" onclick="popAction('rewrite')">✦ Rewrite selection</button>
+  <button class="pop-btn" onclick="popAction('shorten')">Shorten</button>
+  <button class="pop-btn" onclick="popAction('formalise')">Formalise</button>
+  <button class="pop-btn" onclick="popAction('stat')">Add statistic</button>
+  <button class="pop-btn" onclick="popAction('chat')">Ask in chat →</button>
+  <div class="pop-arrow"></div>
+</div>
+
+<div class="main">
+
+<!-- ══ SCREEN 1 — BRIEF ══ -->
+<div class="screen" id="screen1">
+  <div style="margin-bottom:20px;">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;">
+      <div class="sec-title">Speech brief</div>
+      <div class="speaker-tag"><div class="speaker-avatar">LW</div>Minister Lawrence Wong</div>
+    </div>
+    <div class="gold-rule"></div>
+    <div class="sec-desc">Fill in the occasion, audience and key messages. These form the backbone of the generated speech.</div>
+  </div>
+  <div class="card">
+    <div class="card-label"><span class="card-label-dot"></span>Occasion &amp; setting</div>
+    <div class="grid2" style="margin-bottom:14px;">
+      <div class="field"><label>Speaker</label>
+        <select><option>Minister Lawrence Wong</option><option>Minister of State Alvin Tan</option><option>Permanent Secretary (MOF)</option></select>
+      </div>
+      <div class="field"><label>Event name</label><input type="text" value="Singapore Fintech Festival 2025"/></div>
+    </div>
+    <div class="grid3">
+      <div class="field"><label>Target audience</label><input type="text" value="Finance sector &amp; fintech founders"/></div>
+      <div class="field"><label>Speech length</label>
+        <select><option>10 min · ~1,400 words</option><option>5 min · ~700 words</option><option>20 min · ~2,800 words</option></select>
+      </div>
+      <div class="field"><label>Date</label><input type="text" value="7 November 2025"/></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-label"><span class="card-label-dot"></span>Tone &amp; register</div>
+    <div class="chip-row" id="toneRow">
+      <div class="chip on" onclick="setTone(this)">Formal</div>
+      <div class="chip" onclick="setTone(this)">Conversational</div>
+      <div class="chip" onclick="setTone(this)">Motivational</div>
+      <div class="chip" onclick="setTone(this)">Celebratory</div>
+      <div class="chip" onclick="setTone(this)">Solemn</div>
+      <div class="chip" onclick="setTone(this)">Aspirational</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-label"><span class="card-label-dot"></span>Key messages</div>
+    <div class="field"><label>3–5 points the speech must cover</label>
+      <textarea rows="6">— Singapore's position as a leading global fintech hub
+— Budget 2025 support for financial innovation and digitalisation
+— Responsible AI adoption — MAS governance framework
+— Industry-government partnership to build trusted digital economy
+— Forward outlook: Singapore as Asia's digital finance gateway</textarea>
+    </div>
+  </div>
+  <div class="actions">
+    <span class="step-hint">Step 1 of 3</span>
+    <button class="btn-primary" onclick="goTo(2)">Next: upload documents <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </div>
+</div>
+
+<!-- ══ SCREEN 2 — UPLOAD ══ -->
+<div class="screen active" id="screen2">
+  <div style="margin-bottom:20px;">
+    <div class="sec-title">Upload documents</div>
+    <div class="gold-rule"></div>
+    <div class="sec-desc">Upload private documents for this speech. They are used only for this session and not retained afterwards.</div>
+  </div>
+  <div class="card">
+    <div class="card-label"><span class="card-label-dot"></span>Private uploads <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--ink-mute);">— session only, not stored</span></div>
+    <div class="upzone" id="z-brief" onclick="upload('z-brief','fn-brief','background_brief_fintech2025.pdf','tg-brief')">
+      <div class="up-icon" style="background:#EDE9FE;">📋</div>
+      <div class="up-info"><div class="up-name">Background brief</div><div class="up-hint">Main brief — context, objectives, key themes</div><div class="up-file" id="fn-brief">background_brief_fintech2025.pdf</div></div>
+      <span class="up-tag tag-req" id="tg-brief">Required</span>
+    </div>
+    <div class="upzone" id="z-mas" onclick="upload('z-mas','fn-mas','MAS_talking_points_Nov25.pdf','tg-mas')">
+      <div class="up-icon" style="background:#D8EFDF;">📄</div>
+      <div class="up-info"><div class="up-name">Talking points from other agencies</div><div class="up-hint">MAS, MTI or other agency inputs</div><div class="up-file" id="fn-mas">MAS_talking_points_Nov25.pdf</div></div>
+      <span class="up-tag tag-opt" id="tg-mas">Optional</span>
+    </div>
+    <div class="upzone" id="z-email" onclick="upload('z-email','fn-email','email_thread_SFF_coordination.pdf','tg-email')">
+      <div class="up-icon" style="background:#FEF3C7;">📧</div>
+      <div class="up-info"><div class="up-name">Relevant email threads</div><div class="up-hint">Prior discussion or coordination context</div><div class="up-file" id="fn-email">email_thread_SFF_coordination.pdf</div></div>
+      <span class="up-tag tag-opt" id="tg-email">Optional</span>
+    </div>
+    <div class="upzone" id="z-data" onclick="upload('z-data','fn-data','SFF2025_fintech_stats.pdf','tg-data')">
+      <div class="up-icon" style="background:#DBEAFE;">📊</div>
+      <div class="up-info"><div class="up-name">Data &amp; statistics</div><div class="up-hint">Charts, tables or figures to be cited</div><div class="up-file" id="fn-data">SFF2025_fintech_stats.pdf</div></div>
+      <span class="up-tag tag-opt" id="tg-data">Optional</span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-label"><span class="card-label-dot"></span>Public knowledge base <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--ink-mute);">— always active</span></div>
+    <div class="kb-row">
+      <div class="kb-pill"><div class="kb-dot"></div>speeches.gov.sg (2018–2025)</div>
+      <div class="kb-pill"><div class="kb-dot"></div>MOF budget statements</div>
+      <div class="kb-pill"><div class="kb-dot"></div>Hansard (MOF debates)</div>
+      <div class="kb-pill"><div class="kb-dot"></div>Policy papers</div>
+      <div class="kb-pill"><div class="kb-dot"></div>Singstat data</div>
+      <div class="kb-pill live"><div class="kb-dot"></div>Tavily live search</div>
+    </div>
+  </div>
+  <div class="actions">
+    <button class="btn-secondary" onclick="goTo(1)"><svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M13 8H3M7 12l-4-4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <button class="btn-primary" onclick="startGen()">Generate speech <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M8 2l1.5 4.5H14l-3.7 2.7 1.4 4.3L8 11l-3.7 2.5 1.4-4.3L2 6.5h4.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></button>
+  </div>
+</div>
+
+<!-- ══ SCREEN 3 — OUTPUT ══ -->
+<div class="screen" id="screen3">
+
+  <!-- Progress -->
+  <div class="progress-bar">
+    <div class="ps done" id="ps1"><div class="ps-dot">✓</div>Retrieving context</div><div class="ps-sep"></div>
+    <div class="ps done" id="ps2"><div class="ps-dot">✓</div>Building prompt</div><div class="ps-sep"></div>
+    <div class="ps active" id="ps3"><div class="ps-dot">3</div>Review outline</div><div class="ps-sep"></div>
+    <div class="ps" id="ps4"><div class="ps-dot">4</div>Full speech</div><div class="ps-sep"></div>
+    <div class="ps" id="ps5"><div class="ps-dot">5</div>Export</div>
+  </div>
+
+  <div class="gen-bar" id="gen-bar" style="display:none;">
+    <div class="pulse"><span></span><span></span><span></span></div>
+    <span style="font-size:13px;color:var(--accent);" id="gen-text">Retrieving relevant context…</span>
+  </div>
+
+  <div class="tab-row">
+    <div class="tab on" id="t-outline" onclick="showTab('outline')">Outline</div>
+    <div class="tab" id="t-speech" onclick="showTab('speech')">Full speech</div>
+  </div>
+
+  <!-- OUTLINE TAB -->
+  <div id="v-outline">
+    <div style="display:grid;grid-template-columns:1fr 288px;gap:14px;align-items:start;">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;">
+          <div>
+            <div style="font-family:var(--serif);font-size:20px;font-weight:500;color:var(--ink);">Speech outline</div>
+            <div style="font-size:11.5px;color:var(--ink-soft);margin-top:4px;">Singapore Fintech Festival 2025 · Minister Lawrence Wong · 10 min</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-secondary" style="font-size:12px;padding:7px 13px;">Edit outline</button>
+            <button class="btn-primary" style="font-size:12px;padding:7px 13px;" onclick="showFullSpeech()">Generate full speech →</button>
+          </div>
+        </div>
+        <div class="ol-item"><div class="ol-title">Opening — Singapore's fintech journey</div><div class="ol-sub">Acknowledge SFF as a global platform, Singapore's position as 3rd largest fintech hub in Asia [1][3]. Set the stakes: trust, innovation, and our digital future.</div><div class="ol-actions"><button class="ol-btn">✏ Edit</button><button class="ol-btn">↑ Up</button><button class="ol-btn">↓ Down</button><button class="ol-btn">✕ Remove</button></div></div>
+        <div class="ol-item"><div class="ol-title">Section 1 — Budget 2025 support for financial innovation</div><div class="ol-sub">Enhanced EDG for fintech firms [2]. SkillsFuture expansion for digital finance roles. MAS regulatory sandbox updates [4].</div><div class="ol-actions"><button class="ol-btn">✏ Edit</button><button class="ol-btn">↑ Up</button><button class="ol-btn">↓ Down</button><button class="ol-btn">✕ Remove</button></div></div>
+        <div class="ol-item"><div class="ol-title">Section 2 — Responsible AI in financial services</div><div class="ol-sub">MAS FEAT principles — Fairness, Ethics, Accountability, Transparency [1][5]. Project Moonshot on AI governance.</div><div class="ol-actions"><button class="ol-btn">✏ Edit</button><button class="ol-btn">↑ Up</button><button class="ol-btn">↓ Down</button><button class="ol-btn">✕ Remove</button></div></div>
+        <div class="ol-item"><div class="ol-title">Section 3 — Industry-government partnership</div><div class="ol-sub">MAS co-development model [1]. Invite industry to shape next phase of digital finance frameworks [6].</div><div class="ol-actions"><button class="ol-btn">✏ Edit</button><button class="ol-btn">↑ Up</button><button class="ol-btn">↓ Down</button><button class="ol-btn">✕ Remove</button></div></div>
+        <div class="ol-item"><div class="ol-title">Closing — Forward outlook</div><div class="ol-sub">Singapore's ambition as Asia's digital finance gateway [3]. Return to theme of trust. Forward-looking close.</div><div class="ol-actions"><button class="ol-btn">✏ Edit</button><button class="ol-btn">↑ Up</button><button class="ol-btn">↓ Down</button><button class="ol-btn">✕ Remove</button></div></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:14px;border-top:1px solid var(--rule);">
+          <button class="btn-secondary" style="font-size:12px;">+ Add section</button>
+          <button class="btn-primary" onclick="showFullSpeech()">Generate full speech from outline →</button>
+        </div>
+      </div>
+      <div class="cite-panel">
+        <div class="cite-head">Sources retrieved <span class="cite-count">6</span></div>
+        <div class="cite-item"><div class="ci-row"><div class="ci-num" style="background:#E8E0F8;color:#5B3FA6;">1</div><div class="ci-src">MAS_talking_points_Nov25.pdf</div><span class="ci-tag t-priv">Private</span></div><div class="ci-excerpt">AI governance, FEAT principles, co-development…</div><div class="ci-meta">p.2 · <span class="score-hi">0.94</span></div></div>
+        <div class="cite-item"><div class="ci-row"><div class="ci-num" style="background:#D8EFDF;color:#2D6A4F;">2</div><div class="ci-src">Budget Statement 2025</div><span class="ci-tag t-pub">Public</span></div><div class="ci-excerpt">Enhanced EDG for fintech, SkillsFuture…</div><div class="ci-meta">p.14 · <span class="score-hi">0.91</span></div></div>
+        <div class="cite-item"><div class="ci-row"><div class="ci-num" style="background:#F5ECC8;color:#B8860B;">3</div><div class="ci-src">Tavily — live search</div><span class="ci-tag t-live">Live</span></div><div class="ci-excerpt">SG ranked 3rd fintech hub, Asia-Pacific 2024…</div><div class="ci-meta"><span class="score-hi">0.88</span></div></div>
+        <div class="cite-item"><div class="ci-row"><div class="ci-num" style="background:#D8EFDF;color:#2D6A4F;">4</div><div class="ci-src">speeches.gov.sg · SFF 2024</div><span class="ci-tag t-pub">Public</span></div><div class="ci-excerpt">MAS sandbox expansion…</div><div class="ci-meta"><span class="score-hi">0.85</span></div></div>
+        <div class="cite-item"><div class="ci-row"><div class="ci-num" style="background:#E8E0F8;color:#5B3FA6;">5</div><div class="ci-src">background_brief_fintech2025.pdf</div><span class="ci-tag t-priv">Private</span></div><div class="ci-excerpt">5,000 delegates, 60% international…</div><div class="ci-meta">p.1 · <span class="score-hi">0.82</span></div></div>
+        <div class="cite-item"><div class="ci-row"><div class="ci-num" style="background:#F5ECC8;color:#B8860B;">6</div><div class="ci-src">Tavily — live search</div><span class="ci-tag t-live">Live</span></div><div class="ci-excerpt">MAS digital finance gateway, Oct 2025…</div><div class="ci-meta"><span class="score-mid">0.61</span></div><div class="warn-pill">⚠ Low confidence — verify</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FULL SPEECH TAB -->
+  <div id="v-speech" style="display:none;">
+
+    <!-- Speech + Chat split -->
+    <div class="speech-layout" id="speech-layout">
+
+      <!-- LEFT: Speech document -->
+      <div class="card" style="padding:32px 36px;">
+        <!-- Meta bar -->
+        <div class="meta-bar">
+          <div class="meta-item"><svg width="12" height="12" fill="none" viewBox="0 0 16 16"><path d="M8 9A4 4 0 108 1a4 4 0 000 8zM2 15c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg><strong>Minister Lawrence Wong</strong></div>
+          <div class="meta-sep"></div>
+          <div class="meta-item"><strong>7 Nov 2025</strong></div>
+          <div class="meta-sep"></div>
+          <div class="meta-item">~1,400 words · 10 min · Formal</div>
+          <div style="margin-left:auto;display:flex;gap:7px;align-items:center;">
+            <button class="open-chat-btn" id="open-chat-btn" onclick="toggleChat(true)">
+              <svg width="13" height="13" fill="none" viewBox="0 0 16 16"><path d="M14 10a2 2 0 01-2 2H5l-3 3V4a2 2 0 012-2h8a2 2 0 012 2v6z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+              Refine with chat
+              <span class="chat-badge" id="chat-badge" style="display:none;">0</span>
+            </button>
+            <button class="btn-secondary" style="font-size:12px;padding:6px 13px;">Copy</button>
+            <button class="btn-sage" style="font-size:12px;padding:6px 13px;" onclick="markExported()">↓ Export .docx</button>
+          </div>
+        </div>
+
+        <!-- Version strip -->
+        <div class="ver-strip" id="ver-strip">
+          <div class="ver-chip cur" id="ver-v1" onclick="switchVer(1)"><div class="ver-dot"></div>v1 · Original</div>
+          <div class="ver-label" id="ver-label">Current draft</div>
+        </div>
+
+        <!-- Speech title -->
+        <div style="font-family:var(--serif);font-size:13px;font-weight:500;color:var(--ink-soft);margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Speech at the</div>
+        <div style="font-family:var(--serif);font-size:28px;font-weight:500;color:var(--ink);line-height:1.2;margin-bottom:22px;">Singapore Fintech Festival 2025</div>
+
+        <!-- Speech body (selectable) -->
+        <div class="speech-doc" id="speech-body" onmouseup="onTextSelect(event)">
+          <p id="p0">Good morning. It is a privilege to join you once again at the Singapore Fintech Festival — a gathering that has come to represent not just the scale of our ambitions, but the depth of trust that underpins everything we seek to build together.<span class="cite cite-priv" title="background_brief_fintech2025.pdf — Audience profile">5</span></p>
+          <p id="p1">Singapore is today ranked among the top three fintech hubs in Asia-Pacific.<span class="cite cite-live" title="Tavily live search — 2024 Global Fintech Index">3</span> That is not an accident. It is the result of sustained, deliberate choices — by government, by industry, and by the many talented individuals who have chosen to build here. But rankings are a lagging indicator. What matters more is what we choose to build next.</p>
+          <p id="p2">Let me share three things on my mind this morning.</p>
+          <p id="p3"><strong>First, on support for innovation.</strong> In Budget 2025, we enhanced the Enterprise Development Grant to help more fintech firms scale their capabilities and internationalise.<span class="cite cite-pub" title="Budget Statement 2025 — EDG enhancements, p.14">2</span> We also expanded SkillsFuture pathways for digital finance roles, because the talent ecosystem is as important as the regulatory one. And MAS has updated the regulatory sandbox to allow faster, safer testing of new financial products — because we understand that speed matters when innovation waits for no one.<span class="cite cite-pub" title="speeches.gov.sg — DPM Wong, SFF 2024">4</span></p>
+          <p id="p4"><strong>Second, on the responsible use of AI.</strong> Artificial intelligence is already reshaping financial services — in credit assessment, fraud detection, customer service, and beyond. We welcome this. But we also hold a clear position: innovation without accountability is not innovation we can sustain.<span class="cite cite-priv" title="MAS_talking_points_Nov25.pdf — AI governance, p.2">1</span></p>
+          <p id="p5">The MAS FEAT principles — Fairness, Ethics, Accountability, and Transparency — are not bureaucratic constraints. They are the foundation on which trust is built.<span class="cite cite-priv" title="MAS_talking_points_Nov25.pdf — FEAT principles, p.2">1</span> And trust, as anyone in financial services knows, is the most valuable and most fragile asset of all.</p>
+          <p id="p6"><strong>Third, on partnership.</strong> Government can set the conditions. Industry must do the building. What Singapore does well — and what I hope we continue to do — is develop these frameworks together.<span class="cite cite-priv" title="MAS_talking_points_Nov25.pdf — Co-development model, p.3">1</span> The consultation papers, the industry working groups, the bilateral engagements — these are not theatre. They reflect a genuine belief that the best policy is policy that practitioners have helped to shape.</p>
+          <p id="p7">Our ambition is clear: to be Asia's gateway for trusted digital finance.<span class="cite cite-live" title="Tavily — MAS consultation paper Oct 2025">6</span> That means being the place where new ideas get tested, refined, and validated before they scale across the region. It means being a jurisdiction where innovation is met not with suspicion, but with a structured, principled welcome.</p>
+          <p id="p8">We have much still to build. But standing here, looking out at this room — the founders, the investors, the policymakers, the builders — I am confident that we will build it well.</p>
+          <p id="p9">Thank you.</p>
+        </div>
+      </div>
+
+      <!-- RIGHT: Chat panel (hidden by default) -->
+      <div class="chat-panel" id="chat-panel" style="display:none;">
+        <div class="chat-header">
+          <div class="chat-title">
+            <div class="chat-live-dot"></div>
+            Speech refinement
+          </div>
+          <button class="chat-close" onclick="toggleChat(false)" title="Close chat">✕</button>
+        </div>
+        <div class="chat-context-bar">
+          <svg width="11" height="11" fill="none" viewBox="0 0 16 16"><path d="M8 1l1.3 4H14l-3.5 2.5 1.3 4L8 9l-3.8 2.5 1.3-4L2 5h4.7z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+          Context-aware · full speech + 4 uploaded docs loaded
+        </div>
+        <div class="chat-msgs" id="chat-msgs">
+          <div class="msg msg-ai">
+            <div class="msg-bubble">Your speech draft is ready. Select any passage to rewrite it, or ask me anything below — I have the full brief, your uploaded documents, and the complete speech in context.</div>
+          </div>
+        </div>
+        <div class="quick-prompts" id="quick-prompts">
+          <div class="qp" onclick="sendQuick('Make the opening more personal and vivid')">More vivid opening</div>
+          <div class="qp" onclick="sendQuick('Shorten the AI section by 30%')">Shorten AI section</div>
+          <div class="qp" onclick="sendQuick('Make the closing stronger and more memorable')">Stronger closing</div>
+          <div class="qp" onclick="sendQuick('Add a concrete statistic to the Budget 2025 section')">Add stat to Budget section</div>
+          <div class="qp" onclick="sendQuick('Make the whole tone slightly less formal')">Slightly less formal</div>
+        </div>
+        <div class="chat-input-area">
+          <textarea class="chat-input" id="chat-input" rows="1" placeholder="Instruct changes or ask questions…" onkeydown="chatKeydown(event)" oninput="autoResize(this)"></textarea>
+          <button class="chat-send" onclick="sendChat()" title="Send">
+            <svg fill="none" viewBox="0 0 16 16"><path d="M14 8L2 2l3 6-3 6 12-6z" stroke="white" stroke-width="1.5" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </div>
+    </div><!-- /speech-layout -->
+
+  </div><!-- /v-speech -->
+
+  <div class="actions" style="margin-top:10px;">
+    <button class="btn-secondary" onclick="goTo(2)"><svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M13 8H3M7 12l-4-4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Back</button>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-secondary" id="btn-back-outline" style="display:none;" onclick="showTab('outline')">← Back to outline</button>
+      <button class="btn-sage" onclick="markExported()">↓ Export .docx</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+<div id="toast">✓ Speech exported as .docx</div>
+
+<script>
+/* ── NAV ── */
+function goTo(n) {
+  document.querySelectorAll('.screen').forEach((s,i) => s.classList.toggle('active', i===n-1));
+  document.querySelectorAll('.step').forEach((p,i) => {
+    p.classList.remove('active','done');
+    if(i+1<n) p.classList.add('done');
+    if(i+1===n) p.classList.add('active');
+  });
+  document.querySelectorAll('.step-badge').forEach((d,i) => d.textContent = (i+1<n)?'✓':(i+1));
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function setTone(el) { document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on')); el.classList.add('on'); }
+function upload(zId,fnId,fname,tagId) {
+  const z=document.getElementById(zId); if(z.classList.contains('ok')) return;
+  z.classList.add('ok'); document.getElementById(fnId).style.display='block';
+  const t=document.getElementById(tagId); t.textContent='✓ Uploaded'; t.className='up-tag tag-ok';
+}
+function startGen() {
+  goTo(3);
+  const bar=document.getElementById('gen-bar');
+  const steps=['Retrieving context from public knowledge base…','Searching private documents for key facts…','Running live web search via Tavily…','Reranking and merging retrieved chunks…','Building augmented generation prompt…','Drafting speech with Claude…'];
+  bar.style.display='flex'; let i=0;
+  const iv=setInterval(()=>{ if(i<steps.length){document.getElementById('gen-text').textContent=steps[i++];}else{clearInterval(iv);bar.style.display='none';}},650);
+}
+function showTab(tab) {
+  const iso=tab==='outline';
+  document.getElementById('v-outline').style.display=iso?'block':'none';
+  document.getElementById('v-speech').style.display=iso?'none':'block';
+  document.getElementById('t-outline').classList.toggle('on',iso);
+  document.getElementById('t-speech').classList.toggle('on',!iso);
+  document.getElementById('btn-back-outline').style.display=iso?'none':'inline-flex';
+}
+function showFullSpeech() {
+  showTab('speech');
+  const ps3=document.getElementById('ps3'); ps3.classList.remove('active'); ps3.classList.add('done'); ps3.querySelector('.ps-dot').textContent='✓';
+  document.getElementById('ps4').classList.add('active');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function markExported() {
+  ['ps4','ps5'].forEach(id=>{ const el=document.getElementById(id); el.classList.remove('active'); el.classList.add('done'); el.querySelector('.ps-dot').textContent='✓'; });
+  const t=document.getElementById('toast'); t.style.display='block'; setTimeout(()=>t.style.display='none',3000);
+}
+
+/* ── CHAT PANEL ── */
+let chatOpen=false;
+let msgCount=0;
+let verCount=1;
+
+function toggleChat(open) {
+  chatOpen=open;
+  const panel=document.getElementById('chat-panel');
+  const layout=document.getElementById('speech-layout');
+  panel.style.display=open?'flex':'none';
+  layout.classList.toggle('chat-open',open);
+  if(open) {
+    document.getElementById('open-chat-btn').style.opacity='0.5';
+    setTimeout(()=>document.getElementById('chat-input').focus(),200);
+  } else {
+    document.getElementById('open-chat-btn').style.opacity='1';
+  }
+}
+
+function autoResize(el) {
+  el.style.height='auto';
+  el.style.height=Math.min(el.scrollHeight,80)+'px';
+}
+
+function chatKeydown(e) {
+  if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+}
+
+function sendQuick(msg) {
+  document.getElementById('chat-input').value=msg;
+  sendChat();
+}
+
+const responses = {
+  'opening': { text:"I've rewritten the opening to be more vivid and personal. The new paragraph draws the audience in with a stronger image before pivoting to Singapore's position.", para:'p0', newText:"Good morning. Look around this hall — over five thousand of you, from sixty countries, converging on Singapore once again. There is something quietly remarkable about that fact. Not the numbers themselves, but what they signal: that when the world thinks about the future of finance, it still chooses to have that conversation here. Let me share what I believe we must do to keep earning that trust." },
+  'shorten': { text:"Done — I've tightened the AI section by removing the supporting clause and condensing the FEAT paragraph.", para:'p4', newText:"<strong>Second, on the responsible use of AI.</strong> AI is already reshaping financial services — in credit, fraud, and customer engagement. We welcome this. But innovation without accountability is not innovation we can sustain.<span class='cite cite-priv' title='MAS_talking_points_Nov25.pdf'>1</span>" },
+  'closing':  { text:"I've strengthened the closing with a more memorable final line that echoes the opening theme of trust.", para:'p8', newText:"We have much still to build — but great institutions are not built in a single season. They are built by people who believe the work is worth doing, and who show up for it consistently, year after year. That is what I see in this room. And that is why I remain confident we will build it well." },
+  'stat':     { text:"Added a concrete figure to the Budget 2025 section, sourced from the SFF 2025 stats document you uploaded.", para:'p3', newText:"<strong>First, on support for innovation.</strong> In Budget 2025, we enhanced the Enterprise Development Grant to help more fintech firms scale their capabilities and internationalise — with an additional S$150 million allocated for digital economy firms.<span class='cite cite-priv' title='SFF2025_fintech_stats.pdf — p.7'>★</span> We also expanded SkillsFuture pathways for digital finance roles, and MAS has updated the regulatory sandbox to allow faster, safer testing of new financial products.<span class='cite cite-pub' title='speeches.gov.sg — DPM Wong, SFF 2024'>4</span>" },
+  'formal':   { text:"Adjusted the tone throughout — slightly less formal register while keeping the gravitas appropriate for the occasion.", para:'p2', newText:"Three things are on my mind this morning — let me take each in turn." }
+};
+
+function getResponseKey(msg) {
+  const m=msg.toLowerCase();
+  if(m.includes('open')) return 'opening';
+  if(m.includes('shorten')||m.includes('ai section')||m.includes('shorter')) return 'shorten';
+  if(m.includes('clos')) return 'closing';
+  if(m.includes('stat')) return 'stat';
+  if(m.includes('formal')||m.includes('tone')) return 'formal';
+  return null;
+}
+
+function addMsg(role, html, meta) {
+  const msgs=document.getElementById('chat-msgs');
+  const div=document.createElement('div');
+  div.className='msg msg-'+role;
+  if(role==='user') {
+    div.innerHTML=`<div class="msg-bubble">${html}</div>`;
+  } else {
+    div.innerHTML=`<div class="msg-bubble">${html}</div>${meta||''}`;
+  }
+  msgs.appendChild(div);
+  msgs.scrollTop=msgs.scrollHeight;
+}
+
+function addTyping() {
+  const msgs=document.getElementById('chat-msgs');
+  const div=document.createElement('div');
+  div.className='msg msg-ai msg-typing'; div.id='typing-indicator';
+  div.innerHTML=`<div class="msg-bubble"><div class="pulse"><span></span><span></span><span></span></div></div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop=msgs.scrollHeight;
+}
+
+function removeTyping() {
+  const t=document.getElementById('typing-indicator'); if(t) t.remove();
+}
+
+function sendChat() {
+  const inp=document.getElementById('chat-input');
+  const msg=inp.value.trim(); if(!msg) return;
+  inp.value=''; inp.style.height='auto';
+  msgCount++;
+
+  // Update badge
+  const badge=document.getElementById('chat-badge');
+  badge.style.display='flex'; badge.textContent=msgCount;
+
+  addMsg('user', msg);
+  addTyping();
+
+  setTimeout(()=>{
+    removeTyping();
+    const key=getResponseKey(msg);
+    if(key) {
+      const r=responses[key];
+      addVersion(r.text);
+      applyDiff(r.para, r.newText, r.text);
+    } else {
+      addMsg('ai', "I've noted your instruction. For a full speech revision with AI processing connected, this would update the relevant sections in real time. What else would you like to adjust?");
+    }
+  }, 1400);
+}
+
+function applyDiff(paraId, newHtml, summaryText) {
+  const el=document.getElementById(paraId); if(!el) return;
+  el.innerHTML=newHtml;
+  el.classList.add('diff-add');
+  const vn=verCount;
+  const metaHtml=`<div class="msg-meta"><span class="msg-change-pill">✓ Revised: 1 paragraph</span><button class="msg-undo" onclick="undoDiff('${paraId}')">Undo</button></div>`;
+  addMsg('ai', summaryText, metaHtml);
+  setTimeout(()=>el.classList.remove('diff-add'),6000);
+}
+
+function undoDiff(paraId) {
+  alert('In production: restores the paragraph to the previous version from version history.');
+}
+
+function addVersion(changeDesc) {
+  verCount++;
+  const strip=document.getElementById('ver-strip');
+  // deactivate all
+  strip.querySelectorAll('.ver-chip').forEach(c=>c.classList.remove('cur'));
+  strip.querySelectorAll('.ver-chip .ver-dot').forEach(d=>d.style.background='var(--ink-mute)');
+
+  const chip=document.createElement('div');
+  chip.className='ver-chip cur';
+  chip.id='ver-v'+verCount;
+  chip.innerHTML=`<div class="ver-dot" style="background:var(--accent)"></div>v${verCount} · Chat edit`;
+  chip.onclick=()=>switchVer(verCount);
+  strip.insertBefore(chip, document.getElementById('ver-label'));
+  document.getElementById('ver-label').textContent='Auto-saved · just now';
+
+  // move old chips to clickable but not current
+  strip.querySelectorAll('.ver-chip:not(.cur)').forEach((c,i)=>{
+    c.style.opacity='0.65';
+  });
+}
+
+function switchVer(n) {
+  strip=document.getElementById('ver-strip');
+  strip.querySelectorAll('.ver-chip').forEach(c=>{
+    const isN=c.id==='ver-v'+n;
+    c.classList.toggle('cur',isN);
+    c.style.opacity=isN?'1':'0.65';
+    const dot=c.querySelector('.ver-dot');
+    if(dot) dot.style.background=isN?'var(--accent)':'var(--ink-mute)';
+  });
+  if(n<verCount) {
+    document.getElementById('ver-label').textContent='Viewing v'+n+' — click current to return';
+  } else {
+    document.getElementById('ver-label').textContent='Auto-saved · just now';
+  }
+}
+
+/* ── TEXT SELECTION POPOVER ── */
+let selRange=null;
+function onTextSelect(e) {
+  const sel=window.getSelection();
+  if(!sel||sel.isCollapsed||sel.toString().trim().length<10) {
+    hidePop(); return;
+  }
+  selRange=sel.getRangeAt(0);
+  const rect=sel.getRangeAt(0).getBoundingClientRect();
+  const pop=document.getElementById('sel-popover');
+  pop.style.display='flex';
+  const pw=pop.offsetWidth||280;
+  let left=rect.left+rect.width/2-pw/2;
+  left=Math.max(8,Math.min(left,window.innerWidth-pw-8));
+  pop.style.left=left+'px';
+  pop.style.top=(rect.top+window.scrollY-46)+'px';
+}
+function hidePop() { document.getElementById('sel-popover').style.display='none'; }
+document.addEventListener('mousedown', e=>{ if(!e.target.closest('#sel-popover')) hidePop(); });
+
+function popAction(action) {
+  const sel=window.getSelection();
+  const selectedText=sel&&!sel.isCollapsed ? sel.toString().trim() : '(selected passage)';
+  hidePop();
+
+  const prompts={
+    rewrite: `Rewrite this passage: "${selectedText.substring(0,80)}${selectedText.length>80?'…':''}"`,
+    shorten: `Shorten this passage: "${selectedText.substring(0,80)}${selectedText.length>80?'…':''}"`,
+    formalise: `Make this passage more formal: "${selectedText.substring(0,80)}${selectedText.length>80?'…':''}"`,
+    stat: `Add a relevant statistic to support: "${selectedText.substring(0,80)}${selectedText.length>80?'…':''}"`,
+    chat: `I want to discuss this passage: "${selectedText.substring(0,80)}${selectedText.length>80?'…':''}"`
+  };
+  if(!chatOpen) toggleChat(true);
+  setTimeout(()=>{
+    document.getElementById('chat-input').value=prompts[action];
+    document.getElementById('chat-input').focus();
+    if(action!=='chat') sendChat();
+  },300);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "brief": {
+    "speaker":       "Minister Lawrence Wong",
+    "event_name":    "Singapore Fintech Festival 2025",
+    "date":          "7 November 2025",
+    "audience":      "Finance sector and fintech founders",
+    "length":        "10 min · ~1,400 words",
+    "tone":          "Formal",
+    "key_messages":  "Singapore's position as a leading global fintech hub\nBudget 2025 support for financial innovation and digitalisation\nResponsible AI adoption — MAS governance framework\nIndustry-government partnership to build trusted digital economy\nForward outlook: Singapore as Asia's digital finance gateway"
+  },
+  "documents": [],
+  "assertions": [
+    "no_empty_source_name",
+    "no_empty_excerpt",
+    "warning_flag_for_low_confidence",
+    "word_count_within_15pct",
+    "no_placeholder_text",
+    "no_hallucinated_sources"
+  ]
+}

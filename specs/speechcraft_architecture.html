@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SpeechCraft · System Architecture</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --ink:      #0E1A2B;
+  --ink-soft: #4A6078;
+  --ink-mute: #8EA3B6;
+  --rule:     #D8E3ED;
+  --bg:       #F3F7FA;
+  --surface:  #FFFFFF;
+  --teal:     #0F6E56;
+  --teal-lt:  #D8EFDF;
+  --teal-mid: #1D9E75;
+  --purple:   #5B3FA6;
+  --purple-lt:#E8E0F8;
+  --coral:    #993C1D;
+  --coral-lt: #FAECE7;
+  --coral-mid:#D85A30;
+  --amber:    #BA7517;
+  --amber-lt: #FAEEDA;
+  --gray:     #5F5E5A;
+  --gray-lt:  #F1EFE8;
+  --accent:   #1B4FD8;
+  --serif:    'Cormorant Garamond', Georgia, serif;
+  --sans:     'Instrument Sans', system-ui, sans-serif;
+}
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:var(--sans); background:var(--bg); color:var(--ink); min-height:100vh; padding:40px 24px 64px; }
+.page { max-width:900px; margin:0 auto; }
+
+/* Header */
+.page-hdr { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:32px; padding-bottom:24px; border-bottom:1px solid var(--rule); }
+.page-brand { display:flex; align-items:center; gap:14px; }
+.brand-crest { width:42px; height:42px; background:linear-gradient(135deg,#2A5FD4,#1B3FA0); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+.brand-name { font-family:var(--serif); font-size:26px; font-weight:500; color:var(--ink); line-height:1; }
+.brand-sub { font-size:11px; color:var(--ink-mute); letter-spacing:0.08em; text-transform:uppercase; margin-top:4px; }
+.page-meta { text-align:right; }
+.doc-label { font-size:10px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-mute); margin-bottom:4px; }
+.doc-title { font-family:var(--serif); font-size:18px; font-weight:500; color:var(--ink); }
+.doc-date { font-size:11px; color:var(--ink-mute); margin-top:3px; }
+
+/* Legend */
+.legend { display:flex; gap:20px; margin-bottom:24px; padding:12px 18px; background:var(--surface); border:1px solid var(--rule); border-radius:8px; flex-wrap:wrap; }
+.leg-item { display:flex; align-items:center; gap:7px; font-size:11.5px; color:var(--ink-soft); }
+.leg-dot { width:10px; height:10px; border-radius:3px; flex-shrink:0; }
+
+/* Diagram */
+.diagram { background:var(--surface); border:1px solid var(--rule); border-radius:12px; padding:32px 24px; box-shadow:0 1px 3px rgba(14,26,43,0.06),0 4px 16px rgba(14,26,43,0.04); }
+.stage { margin-bottom:24px; }
+.stage:last-child { margin-bottom:0; }
+.stage-row { display:flex; gap:0; align-items:stretch; }
+.stage-label-col { width:68px; flex-shrink:0; display:flex; flex-direction:column; align-items:center; padding-top:4px; gap:2px; }
+.stage-num { width:26px; height:26px; border-radius:50%; background:var(--ink); color:#fff; font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.stage-name { font-size:10px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-mute); }
+.stage-line { width:1px; background:var(--rule); flex:1; margin-top:6px; }
+.stage-content { flex:1; min-width:0; }
+.node-grid { display:grid; gap:8px; margin-bottom:8px; }
+.g2 { grid-template-columns:1fr 1fr; }
+.g3 { grid-template-columns:1fr 1fr 1fr; }
+.g4 { grid-template-columns:1fr 1fr 1fr 1fr; }
+.g1 { grid-template-columns:1fr; }
+.node { border-radius:7px; padding:11px 14px; border:1px solid; }
+.node-title { font-size:12.5px; font-weight:600; margin-bottom:3px; line-height:1.3; }
+.node-sub { font-size:11px; line-height:1.5; opacity:0.8; }
+.n-teal   { background:var(--teal-lt);   border-color:#9FE1CB; color:#085041; }
+.n-purple { background:var(--purple-lt); border-color:#AFA9EC; color:#26215C; }
+.n-coral  { background:var(--coral-lt);  border-color:#F5C4B3; color:#4A1B0C; }
+.n-amber  { background:var(--amber-lt);  border-color:#FAC775; color:#412402; }
+.n-gray   { background:var(--gray-lt);   border-color:#D3D1C7; color:#2C2C2A; }
+.n-ink    { background:var(--ink);       border-color:var(--ink); color:#fff; }
+.n-green  { background:#EAF3DE;          border-color:#C0DD97; color:#173404; }
+.dual-panel { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:8px; }
+.panel { border-radius:8px; border:1px solid; overflow:hidden; }
+.panel-head { padding:6px 12px; font-size:10px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; }
+.panel-body { padding:10px; display:flex; flex-direction:column; gap:8px; }
+.p-teal { border-color:#5DCAA5; }
+.p-teal .panel-head { background:var(--teal-mid); color:#fff; }
+.p-purple { border-color:#AFA9EC; }
+.p-purple .panel-head { background:var(--purple); color:#fff; }
+.down-arrow { text-align:center; color:var(--ink-mute); font-size:14px; padding:2px 0 4px; line-height:1; }
+
+/* Stack table */
+.stack-table { width:100%; border-collapse:collapse; margin-top:28px; font-size:12px; }
+.stack-table th { background:var(--ink); color:#fff; padding:8px 14px; text-align:left; font-weight:600; font-size:10px; letter-spacing:0.08em; text-transform:uppercase; }
+.stack-table th:first-child { border-radius:6px 0 0 0; }
+.stack-table th:last-child  { border-radius:0 6px 0 0; }
+.stack-table td { padding:8px 14px; border-bottom:1px solid var(--rule); color:var(--ink); vertical-align:top; }
+.stack-table tr:last-child td { border-bottom:none; }
+.stack-table tr:nth-child(even) td { background:var(--bg); }
+.stack-table td:first-child { font-weight:600; color:var(--ink-soft); width:160px; }
+.stack-tag { display:inline-flex; align-items:center; gap:5px; background:var(--teal-lt); color:var(--teal); border-radius:4px; padding:1px 7px; font-size:10px; font-weight:600; margin-left:6px; vertical-align:middle; }
+.stack-tag.note { background:var(--amber-lt); color:var(--amber); }
+.stack-tag.new  { background:#EAF3DE; color:#3B6D11; }
+
+/* Notes */
+.feedback-note { margin-top:16px; padding:12px 16px; background:var(--gray-lt); border:1px solid var(--rule); border-left:3px solid var(--ink-mute); border-radius:0 6px 6px 0; font-size:11.5px; color:var(--ink-soft); line-height:1.6; }
+.feedback-note strong { color:var(--ink); font-weight:600; }
+.decision-box { margin-top:16px; padding:14px 16px; background:#FFF8E6; border:1px solid #EAD06A; border-radius:8px; font-size:11.5px; color:#5C4300; line-height:1.6; }
+.decision-box strong { font-weight:600; }
+
+@media print { body { background:#fff; padding:20px; } .diagram { box-shadow:none; border:1px solid #ccc; } }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="page-hdr">
+    <div class="page-brand">
+      <div class="brand-crest">✍</div>
+      <div>
+        <div class="brand-name">SpeechCraft</div>
+        <div class="brand-sub">Ministry of Finance · AI Speech Writer</div>
+      </div>
+    </div>
+    <div class="page-meta">
+      <div class="doc-label">Architecture document</div>
+      <div class="doc-title">RAG System Architecture</div>
+      <div class="doc-date">July 2026 · v2.0 (updated)</div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="leg-item"><div class="leg-dot" style="background:#1D9E75;"></div>Public corpus / style</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#5B3FA6;"></div>Private / session docs</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#D85A30;"></div>Generation layer</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#BA7517;"></div>User input</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#639922;"></div>Live search</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#888780;"></div>Infrastructure</div>
+  </div>
+
+  <!-- Diagram -->
+  <div class="diagram">
+
+    <!-- INGEST -->
+    <div class="stage">
+      <div class="stage-row">
+        <div class="stage-label-col">
+          <div class="stage-num">①</div>
+          <div class="stage-name">Ingest</div>
+          <div class="stage-line"></div>
+        </div>
+        <div class="stage-content">
+          <div class="dual-panel">
+            <div class="panel p-teal">
+              <div class="panel-head">Public corpus ingestion</div>
+              <div class="panel-body">
+                <div class="node n-teal">
+                  <div class="node-title">PMO newsroom</div>
+                  <div class="node-sub">pmo.gov.sg/newsroom · PM, DPM, ministerial speeches · manually downloaded as PDF/HTML seed corpus</div>
+                </div>
+                <div class="node n-teal">
+                  <div class="node-title">Hansard</div>
+                  <div class="node-sub">sprs.parl.gov.sg · Parliamentary debates · filtered to MOF-relevant topics</div>
+                </div>
+                <div class="node n-gray">
+                  <div class="node-title">Parse, chunk &amp; extract</div>
+                  <div class="node-sub">pdfplumber · paragraph-level splits · style feature extraction · tone, rhythm, rhetorical markers</div>
+                </div>
+              </div>
+            </div>
+            <div class="panel p-purple">
+              <div class="panel-head">Private document ingestion</div>
+              <div class="panel-body">
+                <div class="node n-purple">
+                  <div class="node-title">User uploads</div>
+                  <div class="node-sub">Background briefs · agency talking points · email threads · statistics PDFs</div>
+                </div>
+                <div class="node n-gray">
+                  <div class="node-title">Parse &amp; classify</div>
+                  <div class="node-sub">LlamaParse for PDFs · python-docx for DOCX · document type classification</div>
+                </div>
+                <div class="node n-purple">
+                  <div class="node-title">Metadata tagging</div>
+                  <div class="node-sub">Speaker · event · audience · date · doc type (brief / TP / email / stats)</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="down-arrow">↓</div>
+
+    <!-- STORE -->
+    <div class="stage">
+      <div class="stage-row">
+        <div class="stage-label-col">
+          <div class="stage-num">②</div>
+          <div class="stage-name">Store</div>
+          <div class="stage-line"></div>
+        </div>
+        <div class="stage-content">
+          <div class="node-grid g4">
+            <div class="node n-teal">
+              <div class="node-title">Style vector DB</div>
+              <div class="node-sub">FAISS · persisted to disk · speech chunks + style feature tags</div>
+            </div>
+            <div class="node n-teal">
+              <div class="node-title">Content vector DB</div>
+              <div class="node-sub">FAISS · persisted to disk · topical knowledge from public corpus</div>
+            </div>
+            <div class="node n-purple">
+              <div class="node-title">Private doc DB</div>
+              <div class="node-sub">Chroma · in-memory only · per-session · never persisted to disk</div>
+            </div>
+            <div class="node n-gray">
+              <div class="node-title">Raw doc store</div>
+              <div class="node-sub">Local filesystem · /tmp for session docs · corpus/ for public</div>
+            </div>
+          </div>
+          <div class="decision-box">
+            <strong>Key decisions:</strong> FAISS (not Pinecone) for public corpus — fully local, no cloud. Chroma in-memory (not persisted) for private docs — session cleared after 2 hours. Three separate stores to maintain style/content/privacy separation. Embeddings via OpenAI <code>text-embedding-3-small</code>.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="down-arrow">↓</div>
+
+    <!-- RETRIEVE -->
+    <div class="stage">
+      <div class="stage-row">
+        <div class="stage-label-col">
+          <div class="stage-num">③</div>
+          <div class="stage-name">Retrieve</div>
+          <div class="stage-line"></div>
+        </div>
+        <div class="stage-content">
+          <div class="node n-amber" style="margin-bottom:8px;">
+            <div class="node-title">Speech request</div>
+            <div class="node-sub">Occasion · target audience · key messages · tone · length · speaker profile</div>
+          </div>
+          <div class="node-grid g4">
+            <div class="node n-teal">
+              <div class="node-title">Style retrieval</div>
+              <div class="node-sub">Top-k stylistically similar speech excerpts from FAISS style DB</div>
+            </div>
+            <div class="node n-teal">
+              <div class="node-title">Precedent retrieval</div>
+              <div class="node-sub">Structurally similar past speeches by topic &amp; occasion from FAISS content DB</div>
+            </div>
+            <div class="node n-purple">
+              <div class="node-title">Context retrieval</div>
+              <div class="node-sub">Relevant facts from briefs, talking points, emails via Chroma session DB</div>
+            </div>
+            <div class="node n-green">
+              <div class="node-title">Tavily live search</div>
+              <div class="node-sub">Current statistics, recent policy news, live web results · flagged if confidence &lt; 0.65</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="down-arrow">↓</div>
+
+    <!-- GENERATE -->
+    <div class="stage">
+      <div class="stage-row">
+        <div class="stage-label-col">
+          <div class="stage-num">④</div>
+          <div class="stage-name">Generate</div>
+        </div>
+        <div class="stage-content">
+          <div class="node n-coral" style="margin-bottom:8px;">
+            <div class="node-title">Augmented prompt builder</div>
+            <div class="node-sub">Merges style exemplars + precedent structures + factual context + speech brief · encodes role, tone, length, SG public service register · target &lt;8,000 tokens</div>
+          </div>
+          <div class="node n-ink" style="margin-bottom:8px;">
+            <div class="node-title">LLM — GPT-4o · streaming via OpenAI SDK</div>
+            <div class="node-sub" style="color:rgba(255,255,255,0.7);">System prompt enforces SG public service register · formal tone · length constraint · single API key for both embeddings and generation</div>
+          </div>
+          <div class="node-grid g3" style="margin-bottom:8px;">
+            <div class="node n-coral">
+              <div class="node-title">Draft speech</div>
+              <div class="node-sub">Sectioned output with inline citations and source provenance</div>
+            </div>
+            <div class="node n-coral">
+              <div class="node-title">Style confidence score</div>
+              <div class="node-sub">Corpus alignment score · ⚠ flag for confidence &lt; 0.65</div>
+            </div>
+            <div class="node n-coral">
+              <div class="node-title">Chat refinement loop</div>
+              <div class="node-sub">Streamlit chat · version tracking in session_state · full speech in context</div>
+            </div>
+          </div>
+          <div class="node n-gray">
+            <div class="node-title">Human review &amp; feedback loop</div>
+            <div class="node-sub">Approved speeches re-ingested into FAISS style corpus with quality tag · improves retrieval ranking over time</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /diagram -->
+
+  <!-- Tech stack table -->
+  <table class="stack-table" style="margin-top:28px;">
+    <thead>
+      <tr><th>Layer</th><th>Tool / Service</th><th>Notes</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Frontend</td>
+        <td>Streamlit</td>
+        <td>Single frontend for prototype · layout reference in specs/speechcraft_v3.html</td>
+      </tr>
+      <tr>
+        <td>LLM</td>
+        <td>OpenAI GPT-4o <span class="stack-tag new">updated</span></td>
+        <td>Streaming via OpenAI Python SDK · same API key as embeddings</td>
+      </tr>
+      <tr>
+        <td>Embeddings</td>
+        <td>OpenAI text-embedding-3-small <span class="stack-tag new">updated</span></td>
+        <td>Applied to all three vector stores · calls api.openai.com</td>
+      </tr>
+      <tr>
+        <td>Public vector DB</td>
+        <td>FAISS <span class="stack-tag new">updated</span></td>
+        <td>Fully local · persisted to disk · style_index/ and content_index/ as separate indexes</td>
+      </tr>
+      <tr>
+        <td>Private session DB</td>
+        <td>Chroma <span class="stack-tag note">in-memory only</span></td>
+        <td>persist_directory must never be set · cleared after 2h inactivity · never cross-session</td>
+      </tr>
+      <tr>
+        <td>Document parsing</td>
+        <td>LlamaParse + pdfplumber + python-docx</td>
+        <td>LlamaParse for private uploads · pdfplumber for public corpus PDFs</td>
+      </tr>
+      <tr>
+        <td>Live search</td>
+        <td>Tavily API <span class="stack-tag new">activated</span></td>
+        <td>Fourth retrieval stream · current stats and news · low-confidence results flagged ⚠</td>
+      </tr>
+      <tr>
+        <td>Public corpus sources</td>
+        <td>PMO newsroom + Hansard</td>
+        <td>pmo.gov.sg/newsroom · sprs.parl.gov.sg · manually downloaded seed corpus for prototype</td>
+      </tr>
+      <tr>
+        <td>Raw file storage</td>
+        <td>Local filesystem</td>
+        <td>storage/corpus/ for public · /tmp for session docs · nothing in cloud</td>
+      </tr>
+      <tr>
+        <td>Permitted outbound</td>
+        <td>api.openai.com + api.tavily.com only</td>
+        <td>No other external calls · fully local otherwise · internal tool</td>
+      </tr>
+      <tr>
+        <td>Orchestration</td>
+        <td>Claude Code + CLAUDE.md</td>
+        <td>CLAUDE.md defines stack, build phases, session isolation rules, and evals</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="feedback-note" style="margin-top:16px;">
+    <strong>Open design question:</strong> Should the FAISS style index be filterable by specific speaker (so retrieval adapts to Minister Wong's personal cadence vs. general PS register) or treat all speakers uniformly? Affects chunk metadata tagging at ingestion time — decide before running Phase 1.
+  </div>
+
+</div>
+</body>
+</html>
