@@ -21,7 +21,7 @@ _EXCERPT_LEN = 600                 # max chars per retrieved chunk in prompt
 
 # ── System prompt ──────────────────────────────────────────────────────────────
 
-_SYSTEM_PROMPT = """You are an expert speech writer for the Singapore Ministry of Finance (MOF).
+_SYSTEM_PROMPT = """You are an expert speech writer for the Singapore public service.
 Your task is to draft ministerial speeches in the Singapore public service register.
 
 REGISTER AND TONE RULES:

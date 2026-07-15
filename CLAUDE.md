@@ -8,7 +8,7 @@
 
 ## 1. What this project is
 
-SpeechCraft is a Streamlit-based AI speech drafting tool built for a hackathon prototype. It helps MOF communications staff draft speeches for ministers and senior public servants.
+SpeechCraft is a Streamlit-based AI speech drafting tool built for a hackathon prototype. It helps communications staff draft speeches for ministers and senior public servants.
 
 Given a speech brief (speaker, occasion, audience, key messages, tone, length) and optional supporting documents uploaded for the session, the system:
 1. Retrieves stylistically and topically relevant material from a public corpus of Singapore ministerial speeches (PMO + Hansard)
@@ -101,7 +101,7 @@ Every chunk produced during ingestion or session upload must carry this metadata
   "source_name": str,   # filename or URL e.g. "PM_Lawrence_Wong_NDP2024.pdf"
   "source_type": str,   # "public" | "private" | "live"
   "speaker":     str,   # e.g. "Lawrence Wong" — store for all public chunks
-  "ministry":    str,   # e.g. "PMO" | "MOF" | "Hansard"
+  "ministry":    str,   # e.g. "PMO" | "Hansard"
   "date":        str,   # ISO format e.g. "2024-08-18"
   "occasion":    str,   # e.g. "National Day Rally 2024"
   "page_ref":    str,   # e.g. "p.3" or "" if not available
@@ -206,7 +206,7 @@ Do not skip phases. Each phase must pass its verify step before the next begins.
 Wire Phases 1–4 into `app.py`. Match the three-step flow in `specs/speechcraft_v3.html`:
 
 **Step 1 — Brief form:**
-- Speaker dropdown (Minister Lawrence Wong, Minister of State Alvin Tan, Permanent Secretary MOF)
+- Speaker dropdown (Minister Lawrence Wong, Minister of State Alvin Tan, Permanent Secretary)
 - Event name text input
 - Target audience text input
 - Speech length select (5 min ~700 words / 10 min ~1,400 words / 20 min ~2,800 words)

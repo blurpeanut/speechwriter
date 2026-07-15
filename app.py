@@ -1,5 +1,5 @@
 """
-SpeechCraft · MOF AI Speech Writer
+SpeechCraft · AI Speech Writer
 Streamlit application entrypoint — Phase 5.
 """
 import html
@@ -16,7 +16,7 @@ load_dotenv()
 
 # ── Page config must be the first Streamlit call ──────────────────────────────
 st.set_page_config(
-    page_title="SpeechCraft · MOF",
+    page_title="SpeechCraft",
     page_icon="✍",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -98,7 +98,7 @@ def _header() -> None:
         st.markdown(
             "## ✍ &nbsp;SpeechCraft"
             "<span style='font-size:13px;color:#8EA3B6;font-weight:400;margin-left:10px;'>"
-            "Ministry of Finance · AI Speech Writer</span>",
+            "AI Speech Writer</span>",
             unsafe_allow_html=True,
         )
     with c2:
