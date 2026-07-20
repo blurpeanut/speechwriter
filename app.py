@@ -204,23 +204,24 @@ def _render_citation_detail(c: dict) -> None:
         f'font-size:11px;font-weight:600;border:1px solid {border};">{label}</span>',
         unsafe_allow_html=True,
     )
-    st.markdown(
-        f'<div style="margin:10px 0 4px;">'
-        f'<span style="color:#8EA3B6;font-size:11px;">Confidence</span>'
-        f'<span style="color:{bar_color};font-weight:600;font-size:13px;'
-        f'margin-left:8px;">{score:.2f}</span></div>'
-        f'<div style="background:#1C2B3A;border-radius:4px;height:6px;overflow:hidden;">'
-        f'<div style="width:{int(score*100)}%;height:6px;background:{bar_color};'
-        f'border-radius:4px;"></div></div>',
-        unsafe_allow_html=True,
-    )
+    if role != "style_only":
+        st.markdown(
+            f'<div style="margin:10px 0 4px;">'
+            f'<span style="color:#8EA3B6;font-size:11px;">Confidence</span>'
+            f'<span style="color:{bar_color};font-weight:600;font-size:13px;'
+            f'margin-left:8px;">{score:.2f}</span></div>'
+            f'<div style="background:#1C2B3A;border-radius:4px;height:6px;overflow:hidden;">'
+            f'<div style="width:{int(score*100)}%;height:6px;background:{bar_color};'
+            f'border-radius:4px;"></div></div>',
+            unsafe_allow_html=True,
+        )
     if c.get("page_ref"):
         st.caption(f"📄 {c['page_ref']}")
     st.markdown(
         f'<div class="cite-excerpt">"{html.escape(c["excerpt"])}"</div>',
         unsafe_allow_html=True,
     )
-    if c.get("warning") or score < 0.60:
+    if role != "style_only" and (c.get("warning") or score < 0.60):
         st.markdown(
             '<div class="cite-warn">⚠ Low confidence — verify this source before use.</div>',
             unsafe_allow_html=True,
@@ -502,23 +503,6 @@ def screen_generate() -> None:
             annotated = _annotate_speech(st.session_state.current_speech, citations)
             st.markdown(f'<div class="speech">{annotated}</div>', unsafe_allow_html=True)
 
-            # Citation pills — click to switch active citation
-            if citations:
-                st.markdown("")
-                active_id = st.session_state.get("active_citation")
-                pill_cols = st.columns(min(len(citations), 12))
-                for col, c in zip(pill_cols, citations):
-                    role = _citation_role(c)
-                    tc   = _ROLE_STYLE.get(role, _ROLE_STYLE["content"])[1]
-                    is_active = c["id"] == active_id
-                    if col.button(
-                        str(c["id"]),
-                        key=f"pill_{c['id']}",
-                        type="primary" if is_active else "secondary",
-                        use_container_width=True,
-                    ):
-                        st.session_state.active_citation = c["id"]
-                        st.rerun()
 
         with col_panel:
             st.markdown(
