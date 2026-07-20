@@ -10,7 +10,6 @@ import uuid
 
 import streamlit as st
 from dotenv import load_dotenv
-from ingestion.chunker import normalise_speaker
 
 load_dotenv()
 
@@ -79,14 +78,14 @@ def _init() -> None:
         "ready":           True,
         "step":            1,
         "session_id":      sid,
-        "brief":           {},
+        "context":         "",         # free-text context from Step 1
         "ingested_files":  set(),
         "generation_done": False,
-        "output":          None,       # pipeline output dict
+        "output":          None,
         "current_speech":  "",
         "versions":        [],         # list of {label, speech, citations}
         "cur_ver":         0,
-        "chat_history":    [],         # list of {role, content}
+        "chat_history":    [],
     })
     logger.info("Streamlit session initialised: %s", sid)
 
@@ -114,7 +113,7 @@ def _header() -> None:
 # ── Step rail ─────────────────────────────────────────────────────────────────
 def _step_rail() -> None:
     step   = st.session_state.step
-    labels = ["1 · Speech brief", "2 · Upload documents", "3 · Generate & review"]
+    labels = ["1 · Upload & context", "2 · Generate & review"]
     parts  = []
     for i, label in enumerate(labels, 1):
         if i < step:
@@ -177,78 +176,10 @@ def _render_speech(text: str) -> None:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SCREEN 1 — BRIEF
-# ══════════════════════════════════════════════════════════════════════════════
-def screen_brief() -> None:
-    st.subheader("Speech brief")
-    st.caption("Fill in the occasion, audience, and key messages.")
-
-    with st.form("brief_form"):
-        c1, c2 = st.columns(2)
-        with c1:
-            speaker = st.text_input(
-                "Speaker",
-                placeholder="e.g. Minister Lawrence Wong",
-                help="Enter the speaker's full name and title",
-            )
-        with c2:
-            event_name = st.text_input(
-                "Event name", placeholder="e.g. Singapore Fintech Festival 2025"
-            )
-
-        c3, c4, c5 = st.columns(3)
-        with c3:
-            audience = st.text_input(
-                "Target audience", placeholder="e.g. Finance sector & fintech founders"
-            )
-        with c4:
-            length = st.selectbox("Speech length", [
-                "10 min · ~1,400 words",
-                "5 min · ~700 words",
-                "20 min · ~2,800 words",
-            ])
-        with c5:
-            date = st.text_input("Date", placeholder="e.g. 7 November 2025")
-
-        tone = st.radio(
-            "Tone & register",
-            ["Formal", "Conversational", "Motivational", "Celebratory", "Solemn"],
-            horizontal=True,
-        )
-        key_messages = st.text_area(
-            "Key messages (3–5 points the speech must cover)",
-            height=160,
-            placeholder="— First key message\n— Second key message\n— Third key message",
-        )
-
-        go = st.form_submit_button("Next: upload documents →", type="primary")
-
-    if go:
-        if not event_name.strip():
-            st.error("Please enter an event name.")
-            return
-        if not key_messages.strip():
-            st.error("Please enter at least one key message.")
-            return
-        st.session_state.brief = {
-            "speaker":      normalise_speaker(speaker),
-            "event_name":   event_name.strip(),
-            "date":         date.strip(),
-            "audience":     audience.strip(),
-            "length":       length,
-            "tone":         tone,
-            "key_messages": key_messages.strip(),
-        }
-        st.session_state.step = 2
-        st.rerun()
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# SCREEN 2 — UPLOAD DOCUMENTS
+# SCREEN 1 — UPLOAD & CONTEXT
 # ══════════════════════════════════════════════════════════════════════════════
 def screen_upload() -> None:
-    st.subheader("Upload documents")
-    st.caption("Upload private documents for this speech. Used only for this session — not retained afterwards.")
+    st.subheader("Upload & context")
 
     st.info(
         "Documents are embedded via OpenAI API (api.openai.com). "
@@ -260,36 +191,41 @@ def screen_upload() -> None:
     sid      = st.session_state.session_id
     ingested = st.session_state.ingested_files
 
-    _UPLOAD_SLOTS = [
-        ("brief_upload",  "📋 Background brief",                   "Main brief — context, objectives, key themes", True),
-        ("tp_upload",     "📄 Talking points from other agencies",  "MAS, MTI or other agency inputs",              False),
-        ("email_upload",  "📧 Relevant email threads",             "Prior discussion or coordination context",      False),
-        ("stats_upload",  "📊 Data & statistics",                  "Charts, tables or figures to be cited",        False),
-    ]
+    uploaded_files = st.file_uploader(
+        "Upload your documents (brief, talking points, emails, stats)",
+        type=["pdf", "docx", "txt"],
+        accept_multiple_files=True,
+        key="multi_upload",
+    )
 
-    for key, label, hint, required in _UPLOAD_SLOTS:
-        req_tag = "Required" if required else "Optional"
-        uploaded = st.file_uploader(
-            f"{label} ({req_tag})",
-            type=["pdf", "docx", "txt"],
-            key=key,
-            help=hint,
-        )
-        if uploaded:
-            if uploaded.name not in ingested:
-                with st.spinner(f"Indexing {uploaded.name}…"):
-                    try:
-                        n = ingestor.ingest(uploaded.getvalue(), uploaded.name, sid)
-                        ingested.add(uploaded.name)
-                        st.success(f"✓ {uploaded.name} — {n} chunks indexed")
-                    except Exception as exc:
-                        st.error(f"Failed to process {uploaded.name}: {exc}")
-                        logger.exception("Ingest error for %s", uploaded.name)
-            else:
-                st.success(f"✓ {uploaded.name} — already indexed")
+    for uploaded in (uploaded_files or []):
+        if uploaded.name not in ingested:
+            with st.spinner(f"Indexing {uploaded.name}…"):
+                try:
+                    n = ingestor.ingest(uploaded.getvalue(), uploaded.name, sid)
+                    ingested.add(uploaded.name)
+                    st.success(f"✓ {uploaded.name} — {n} chunks indexed")
+                except Exception as exc:
+                    st.error(f"Failed to process {uploaded.name}: {exc}")
+                    logger.exception("Ingest error for %s", uploaded.name)
+        else:
+            st.success(f"✓ {uploaded.name} — already indexed")
+
+    context = st.text_area(
+        "Additional context for the AI",
+        height=180,
+        placeholder=(
+            "e.g. Speaker: Minister Lawrence Wong. "
+            "Occasion: Singapore Fintech Festival 2025. "
+            "Audience: fintech founders and investors. "
+            "Key messages: responsible AI adoption, Budget 2025 fintech support. "
+            "Tone: formal."
+        ),
+        value=st.session_state.context,
+    )
 
     st.divider()
-    st.markdown("**Public knowledge base** (always active for every generation)")
+    st.markdown("**Public knowledge base** (always active)")
     st.markdown(
         '<span class="c-pub">PMO speeches (2018–2025)</span> &nbsp;&nbsp;'
         '<span class="c-pub">Hansard debates</span> &nbsp;&nbsp;'
@@ -298,16 +234,14 @@ def screen_upload() -> None:
     )
     st.divider()
 
-    col_back, _, col_go = st.columns([1, 4, 2])
-    with col_back:
-        if st.button("← Back"):
-            st.session_state.step = 1
-            st.rerun()
-    with col_go:
-        if st.button("✦ Generate speech", type="primary"):
-            st.session_state.step            = 3
-            st.session_state.generation_done = False
-            st.rerun()
+    if st.button("✦ Generate speech", type="primary"):
+        if not context.strip() and not ingested:
+            st.error("Please upload at least one document or add context before generating.")
+            return
+        st.session_state.context         = context.strip()
+        st.session_state.step            = 2
+        st.session_state.generation_done = False
+        st.rerun()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -325,13 +259,16 @@ def _run_generation() -> None:
     from generation.llm              import generate_speech
     from generation.citations        import assemble_citations, compute_style_confidence
 
-    brief = st.session_state.brief
-    sid   = st.session_state.session_id
-    smgr  = _session_manager()
-    query = (
-        f"{brief.get('event_name','')} {brief.get('key_messages','')} "
-        f"{brief.get('tone','')} Singapore public service"
-    ).strip()
+    context = st.session_state.context
+    sid     = st.session_state.session_id
+    smgr    = _session_manager()
+    query   = f"{context} Singapore public service".strip()
+    # Build a minimal brief dict so the prompt builder receives expected keys
+    brief = {
+        "speaker": "", "event_name": "", "date": "",
+        "audience": "", "length": "", "tone": "",
+        "key_messages": context,
+    }
 
     with st.status("Generating your speech…", expanded=True) as status:
 
@@ -433,18 +370,13 @@ def screen_generate() -> None:
         return
 
     output  = st.session_state.output
-    brief   = st.session_state.brief
     ver     = st.session_state.versions[st.session_state.cur_ver]
 
     _citations_sidebar(ver["citations"])
 
     # ── Meta bar ───────────────────────────────────────────────────────────────
     wc = len(st.session_state.current_speech.split())
-    st.markdown(
-        f"**{brief['speaker']}** &nbsp;·&nbsp; {brief['event_name']} "
-        f"&nbsp;·&nbsp; {brief.get('date','')} &nbsp;·&nbsp; "
-        f"{wc:,} words &nbsp;·&nbsp; {brief['tone']}",
-    )
+    st.markdown(f"{wc:,} words")
 
     # ── Version selector ───────────────────────────────────────────────────────
     if len(st.session_state.versions) > 1:
@@ -483,7 +415,7 @@ def screen_generate() -> None:
             st.download_button(
                 "↓ Export .txt",
                 data=st.session_state.current_speech,
-                file_name=f"{brief['event_name'].replace(' ','_')}_speech.txt",
+                file_name="speech.txt",
                 mime="text/plain",
             )
         with style_col:
@@ -538,8 +470,8 @@ def screen_generate() -> None:
 
     # ── Back button ────────────────────────────────────────────────────────────
     st.divider()
-    if st.button("← Back to documents"):
-        st.session_state.step            = 2
+    if st.button("← Back"):
+        st.session_state.step            = 1
         st.session_state.generation_done = False
         st.rerun()
 
@@ -554,8 +486,6 @@ def main() -> None:
 
     step = st.session_state.step
     if step == 1:
-        screen_brief()
-    elif step == 2:
         screen_upload()
     else:
         screen_generate()
