@@ -12,11 +12,32 @@ Token counting uses a rough 4-chars-per-token heuristic to avoid a
 tiktoken dependency; the 8,000-token limit has a 20% safety margin.
 """
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
-_MAX_CHARS   = 8_000 * 4 * 0.80   # ~25,600 chars with 20% safety margin
-_EXCERPT_LEN = 600                 # max chars per retrieved chunk in prompt
+_MAX_CHARS      = 8_000 * 4 * 0.80   # ~25,600 chars with 20% safety margin
+_EXCERPT_LEN    = 600                 # max chars per retrieved chunk in prompt
+_WORDS_PER_MIN  = 140                 # average ministerial speech pace
+
+_MINS_RE  = re.compile(r'\b(\d+)\s*(?:minute|min)s?\b', re.IGNORECASE)
+_WORDS_RE = re.compile(r'\b(\d+)\s*(?:word)s?\b',       re.IGNORECASE)
+
+
+def _extract_length_instruction(context: str) -> str:
+    """
+    Derive an explicit word count target from the free-text context.
+    Checks for 'X minutes' first, then 'X words', then defaults to 1,400.
+    """
+    m = _MINS_RE.search(context)
+    if m:
+        mins  = int(m.group(1))
+        words = round(mins * _WORDS_PER_MIN / 50) * 50   # round to nearest 50
+        return f"Target length: {words:,} words ({mins} minutes)."
+    m = _WORDS_RE.search(context)
+    if m:
+        return f"Target length: {int(m.group(1)):,} words."
+    return "Target length: approximately 1,400 words (10 minutes)."
 
 
 # ── System prompt ──────────────────────────────────────────────────────────────
@@ -46,6 +67,11 @@ TONE CALIBRATION:
 - Budget speeches, Singapore Fintech Festival, major economic forums → highest register, most precise.
 - Industry dinners, community events → slightly warmer, marginally less formal.
 
+LENGTH:
+- You MUST hit the word count stated in the SPEECH BRIEF. This is a hard requirement.
+- Write complete, full-length prose — do not produce a summary or skeleton.
+- A 5-minute speech ≈ 700 words. 10 min ≈ 1,400. 15 min ≈ 2,100. 20 min ≈ 2,800.
+
 OUTPUT FORMAT:
 Return a JSON object with exactly these keys:
 {
@@ -73,17 +99,18 @@ def _format_brief(brief: dict) -> str:
             break
     length_hint = length_hint or brief.get("length", "")
 
+    context = brief.get('key_messages', '')
     return f"""SPEECH BRIEF
 ============
 Speaker      : {brief.get('speaker', '')}
 Event        : {brief.get('event_name', '')}
 Date         : {brief.get('date', '')}
 Audience     : {brief.get('audience', '')}
-Length       : {length_hint}
+Length       : {length_hint or _extract_length_instruction(context)}
 Tone         : {brief.get('tone', 'Formal')}
 
-Key messages (must all be addressed):
-{brief.get('key_messages', '')}"""
+Key messages / context:
+{context}"""
 
 
 # ── Chunk formatter ────────────────────────────────────────────────────────────

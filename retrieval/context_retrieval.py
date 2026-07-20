@@ -53,7 +53,9 @@ def retrieve_context(
     distances = raw["distances"][0]   # cosine distance: 0 = identical
 
     for doc, meta, dist in zip(docs, metadatas, distances):
-        confidence = max(0.0, 1.0 - float(dist))   # convert cosine distance → similarity
+        # Floor at 0.70 — user explicitly uploaded these docs for this speech,
+        # so low query-document cosine similarity ≠ irrelevant content.
+        confidence = max(0.70, 1.0 - float(dist))
         chunk = {
             "chunk_id":        str(uuid.uuid4()),
             "source_name":     meta.get("source_name", ""),
