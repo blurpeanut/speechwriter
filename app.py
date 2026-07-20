@@ -335,6 +335,16 @@ def _run_generation() -> None:
         live_r = retrieve_live(query, top_k=3)
 
         retrieved = rerank(style_r, content_r, context_r, live_r)
+        # Normalise: old reranker returns a flat list; new one returns a dict.
+        if isinstance(retrieved, list):
+            retrieved = {
+                "content":    [c for c in retrieved if c.get("source_type") == "public"
+                               and c.get("confidence_score", 0.0) >= 0.60],
+                "style_only": [c for c in retrieved if c.get("source_type") == "public"
+                               and c.get("confidence_score", 0.0) < 0.60],
+                "private":    [c for c in retrieved if c.get("source_type") == "private"],
+                "live":       [c for c in retrieved if c.get("source_type") == "live"],
+            }
         total_chunks = sum(len(v) for v in retrieved.values())
         logger.info("Generation: %d chunks retrieved after reranking", total_chunks)
 
