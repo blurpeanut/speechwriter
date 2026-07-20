@@ -6,6 +6,7 @@ import html
 import json
 import logging
 import os
+import re
 import uuid
 
 import streamlit as st
@@ -18,7 +19,7 @@ st.set_page_config(
     page_title="SpeechCraft",
     page_icon="✍",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 logging.basicConfig(
@@ -48,9 +49,28 @@ st.markdown("""
            font-size:12.5px; font-weight:500; border:1px solid #243547; }
 .sep    { color:#2A3D52; font-size:14px; }
 /* Speech body — light text on dark bg */
-.speech { font-family:'Georgia',serif; font-size:17px; line-height:1.95;
-           color:#D8E3ED; max-width:720px; }
-.speech p { margin-bottom:18px; }
+.speech { font-family:'Georgia',serif; font-size:17px; line-height:1.95; color:#D8E3ED; }
+.speech p { margin-bottom:18px; position:relative; }
+/* Inline citation superscripts */
+.csup {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:15px; height:15px; border-radius:50%;
+    background:#1E3A5F; color:#7EB8F7;
+    font-size:9px; font-weight:700; font-family:sans-serif;
+    vertical-align:super; margin-left:2px; cursor:default;
+    border:1px solid #2A5080;
+}
+/* Citation detail panel */
+.cite-excerpt {
+    background:#0B1520; border-left:3px solid #4D7FE8;
+    padding:14px 16px; border-radius:0 8px 8px 0; margin:12px 0;
+    font-family:'Georgia',serif; font-size:14px; line-height:1.75;
+    color:#A8C0D4; font-style:italic;
+}
+.cite-warn {
+    background:#2D0F0F; border:1px solid #7F1D1D; border-radius:6px;
+    padding:9px 13px; color:#FCA5A5; font-size:12px; margin-top:10px;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -86,6 +106,7 @@ def _init() -> None:
         "versions":        [],         # list of {label, speech, citations}
         "cur_ver":         0,
         "chat_history":    [],
+        "active_citation": None,
     })
     logger.info("Streamlit session initialised: %s", sid)
 
@@ -129,50 +150,81 @@ def _step_rail() -> None:
 
 
 # ── Citation helpers ──────────────────────────────────────────────────────────
-def _badge(source_type: str) -> str:
-    cls = {"public": "c-pub", "private": "c-priv", "live": "c-live"}.get(source_type, "c-pub")
-    return f'<span class="{cls}">{source_type.capitalize()}</span>'
+
+def _citation_role(c: dict) -> str:
+    """Derive citation_role from source_type and confidence_score."""
+    if c["source_type"] == "private":
+        return "private"
+    if c["source_type"] == "live":
+        return "live"
+    return "content" if c["confidence_score"] >= 0.60 else "style_only"
 
 
-def _citations_sidebar(citations: list[dict]) -> None:
-    with st.sidebar:
-        st.markdown("### 📎 Sources")
-        if not citations:
-            st.caption("No citations available.")
-            return
-        pub  = sum(1 for c in citations if c["source_type"] == "public")
-        priv = sum(1 for c in citations if c["source_type"] == "private")
-        live = sum(1 for c in citations if c["source_type"] == "live")
+_ROLE_STYLE: dict[str, tuple[str, str, str, str]] = {
+    # role: (label, text_color, bg_color, border_color)
+    "content":    ("Content",        "#6EE7A0", "#1A3D2B", "#2D6A4F"),
+    "style_only": ("Style reference", "#A0AEC0", "#1C2B3A", "#2D3748"),
+    "private":    ("Private doc",    "#C4AFFE", "#1E1535", "#5B3FA6"),
+    "live":       ("Live search",    "#FBBF24", "#2A1F00", "#92660A"),
+}
+
+
+def _annotate_speech(text: str, citations: list[dict]) -> str:
+    """
+    Return speech HTML with citation superscripts added to each paragraph
+    whose text has keyword overlap with a citation's excerpt.
+    """
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    result: list[str] = []
+    for para in paragraphs:
+        para_words = set(re.findall(r'\b[a-z]{4,}\b', para.lower()))
+        markers: list[int] = []
+        for c in citations:
+            exc_words = set(re.findall(r'\b[a-z]{4,}\b', c["excerpt"].lower()))
+            if exc_words and para_words:
+                overlap = len(para_words & exc_words) / len(exc_words)
+                if overlap >= 0.12:
+                    markers.append(c["id"])
+        escaped = html.escape(para).replace("\n", "<br>")
+        sups    = "".join(f'<sup class="csup">{m}</sup>' for m in markers)
+        result.append(f"<p>{escaped}{sups}</p>")
+    return "".join(result)
+
+
+def _render_citation_detail(c: dict) -> None:
+    """Render the full detail panel for one citation."""
+    role  = _citation_role(c)
+    label, tc, bg, border = _ROLE_STYLE.get(role, _ROLE_STYLE["content"])
+    score = c["confidence_score"]
+    bar_color = "#6EE7A0" if score >= 0.75 else "#FBBF24" if score >= 0.65 else "#F87171"
+
+    st.markdown(f"**{c['source_name']}**")
+    st.markdown(
+        f'<span style="background:{bg};color:{tc};padding:2px 10px;border-radius:20px;'
+        f'font-size:11px;font-weight:600;border:1px solid {border};">{label}</span>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f'<div style="margin:10px 0 4px;">'
+        f'<span style="color:#8EA3B6;font-size:11px;">Confidence</span>'
+        f'<span style="color:{bar_color};font-weight:600;font-size:13px;'
+        f'margin-left:8px;">{score:.2f}</span></div>'
+        f'<div style="background:#1C2B3A;border-radius:4px;height:6px;overflow:hidden;">'
+        f'<div style="width:{int(score*100)}%;height:6px;background:{bar_color};'
+        f'border-radius:4px;"></div></div>',
+        unsafe_allow_html=True,
+    )
+    if c.get("page_ref"):
+        st.caption(f"📄 {c['page_ref']}")
+    st.markdown(
+        f'<div class="cite-excerpt">"{html.escape(c["excerpt"])}"</div>',
+        unsafe_allow_html=True,
+    )
+    if c.get("warning") or score < 0.60:
         st.markdown(
-            f'<span class="c-pub">{pub} public</span> &nbsp;'
-            f'<span class="c-priv">{priv} private</span> &nbsp;'
-            f'<span class="c-live">{live} live</span>',
+            '<div class="cite-warn">⚠ Low confidence — verify this source before use.</div>',
             unsafe_allow_html=True,
         )
-        st.divider()
-        for c in citations:
-            warn  = " ⚠" if c.get("warning") else ""
-            score = c["confidence_score"]
-            sc    = "#6EE7A0" if score >= 0.75 else "#FBBF24" if score >= 0.65 else "#F87171"
-            page  = f" · {c['page_ref']}" if c.get("page_ref") else ""
-            st.markdown(
-                f"**[{c['id']}]** {_badge(c['source_type'])} "
-                f"<span style='color:{sc};font-size:11px;'>{score:.2f}{warn}</span>",
-                unsafe_allow_html=True,
-            )
-            st.caption(f"{c['source_name']}{page}")
-            st.caption(f"*{c['excerpt'][:100]}…*")
-            st.divider()
-
-
-# ── Speech body renderer ──────────────────────────────────────────────────────
-def _render_speech(text: str) -> None:
-    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
-    inner = "".join(
-        f"<p>{html.escape(p).replace(chr(10), '<br>')}</p>"
-        for p in paragraphs
-    )
-    st.markdown(f'<div class="speech">{inner}</div>', unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -283,7 +335,8 @@ def _run_generation() -> None:
         live_r = retrieve_live(query, top_k=3)
 
         retrieved = rerank(style_r, content_r, context_r, live_r)
-        logger.info("Generation: %d chunks retrieved after reranking", len(retrieved))
+        total_chunks = sum(len(v) for v in retrieved.values())
+        logger.info("Generation: %d chunks retrieved after reranking", total_chunks)
 
         status.write("📝 Building generation prompt…")
         system_prompt, user_message = build_prompt(brief, retrieved)
@@ -301,7 +354,10 @@ def _run_generation() -> None:
         outline     = llm_out.get("outline", [])
         style_score = float(llm_out.get("style_confidence_score", 0.0))
 
-        citations        = assemble_citations(retrieved, full_speech)
+        # Flatten all chunks for citation assembly; style_only last (lowest priority)
+        all_chunks = (retrieved["content"] + retrieved["private"]
+                      + retrieved["live"] + retrieved["style_only"])
+        citations        = assemble_citations(all_chunks, full_speech)
         final_style_score = compute_style_confidence(citations) or style_score
 
         status.update(label="Speech ready!", state="complete")
@@ -317,8 +373,9 @@ def _run_generation() -> None:
     st.session_state.versions       = [{"label": "v1 · Original",
                                          "speech": full_speech,
                                          "citations": citations}]
-    st.session_state.cur_ver        = 0
-    st.session_state.chat_history   = []
+    st.session_state.cur_ver         = 0
+    st.session_state.chat_history    = []
+    st.session_state.active_citation = citations[0]["id"] if citations else None
     st.session_state.generation_done = True
 
 
@@ -369,10 +426,9 @@ def screen_generate() -> None:
             st.rerun()
         return
 
-    output  = st.session_state.output
-    ver     = st.session_state.versions[st.session_state.cur_ver]
-
-    _citations_sidebar(ver["citations"])
+    output    = st.session_state.output
+    ver       = st.session_state.versions[st.session_state.cur_ver]
+    citations = ver["citations"]
 
     # ── Meta bar ───────────────────────────────────────────────────────────────
     wc = len(st.session_state.current_speech.split())
@@ -409,7 +465,7 @@ def screen_generate() -> None:
             st.toast("Click the 'Full speech' tab above.")
 
     with tab_speech:
-        # Actions bar
+        # ── Actions bar ────────────────────────────────────────────────────────
         dl_col, _, style_col = st.columns([2, 4, 3])
         with dl_col:
             st.download_button(
@@ -428,14 +484,73 @@ def screen_generate() -> None:
             )
 
         st.markdown("")
-        _render_speech(st.session_state.current_speech)
+
+        # ── Two-column: speech + source panel ──────────────────────────────────
+        col_speech, col_panel = st.columns([3, 2], gap="large")
+
+        with col_speech:
+            annotated = _annotate_speech(st.session_state.current_speech, citations)
+            st.markdown(f'<div class="speech">{annotated}</div>', unsafe_allow_html=True)
+
+            # Citation pills — click to switch active citation
+            if citations:
+                st.markdown("")
+                active_id = st.session_state.get("active_citation")
+                pill_cols = st.columns(min(len(citations), 12))
+                for col, c in zip(pill_cols, citations):
+                    role = _citation_role(c)
+                    tc   = _ROLE_STYLE.get(role, _ROLE_STYLE["content"])[1]
+                    is_active = c["id"] == active_id
+                    if col.button(
+                        str(c["id"]),
+                        key=f"pill_{c['id']}",
+                        type="primary" if is_active else "secondary",
+                        use_container_width=True,
+                    ):
+                        st.session_state.active_citation = c["id"]
+                        st.rerun()
+
+        with col_panel:
+            st.markdown(
+                "<div style='position:sticky;top:80px;'>",
+                unsafe_allow_html=True,
+            )
+            active_id = st.session_state.get("active_citation")
+            active_c  = next((c for c in citations if c["id"] == active_id), None)
+
+            if active_c:
+                st.markdown(
+                    f"<span style='font-size:10px;font-weight:600;color:#5A7A96;"
+                    f"text-transform:uppercase;letter-spacing:0.1em;'>"
+                    f"Source [{active_c['id']}]</span>",
+                    unsafe_allow_html=True,
+                )
+                _render_citation_detail(active_c)
+
+                # Collapsed list of all other citations
+                if len(citations) > 1:
+                    st.markdown("")
+                    with st.expander("All sources", expanded=False):
+                        for c in citations:
+                            role  = _citation_role(c)
+                            label = _ROLE_STYLE.get(role, _ROLE_STYLE["content"])[0]
+                            if st.button(
+                                f"[{c['id']}] {c['source_name'][:40]}",
+                                key=f"src_list_{c['id']}",
+                                use_container_width=True,
+                            ):
+                                st.session_state.active_citation = c["id"]
+                                st.rerun()
+            else:
+                st.caption("Click a citation number to view its source.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
         st.divider()
 
         # ── Chat refinement ────────────────────────────────────────────────────
         st.markdown("#### Refine with chat")
         st.caption("Each change is saved as a new version. Switch versions above.")
 
-        # Quick-prompt chips
         quick_options = [
             "Make the opening more vivid and personal",
             "Shorten the speech by 20%",
@@ -446,17 +561,14 @@ def screen_generate() -> None:
         quick_cols = st.columns(len(quick_options))
         quick_hit  = None
         for col, opt in zip(quick_cols, quick_options):
-            short_label = opt.split()[0] + "…" if len(opt) > 20 else opt
             if col.button(opt[:22] + "…" if len(opt) > 22 else opt,
                           use_container_width=True, key=f"qp_{opt[:10]}"):
                 quick_hit = opt
 
-        # Display chat history
         for msg in st.session_state.chat_history:
             with st.chat_message(msg["role"]):
                 st.write(msg["content"])
 
-        # Chat input (or quick prompt)
         prompt = st.chat_input("Instruct changes or ask questions…")
         if not prompt and quick_hit:
             prompt = quick_hit

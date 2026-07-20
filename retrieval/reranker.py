@@ -39,18 +39,25 @@ def _deduplicate(chunks: list[dict]) -> list[dict]:
     return kept
 
 
+_CONTENT_THRESHOLD = 0.60   # public chunks below this score are style-only
+
+
 def rerank(
     style_results: list[dict],
     content_results: list[dict],
     context_results: list[dict],
     live_results: list[dict],
-) -> list[dict]:
+) -> dict:
     """
-    Merge all four retrieval streams, deduplicate, and sort by confidence_score.
+    Merge all four retrieval streams, deduplicate, and split into four lists.
 
-    Every returned chunk carries: source_name, source_type, confidence_score,
-    page_ref, text — the minimum required for the prompt builder and citation
-    assembler in Phase 4.
+    Returns:
+        {
+          "content":    public chunks with confidence_score >= 0.60  (factual use),
+          "style_only": public chunks with confidence_score <  0.60  (register reference only),
+          "private":    private session chunks (always kept),
+          "live":       Tavily live-search chunks (always kept),
+        }
     """
     all_chunks = style_results + content_results + context_results + live_results
 
@@ -62,9 +69,24 @@ def rerank(
         logger.debug("Deduplication: %d → %d chunks", before, after)
 
     merged.sort(key=lambda c: c.get("confidence_score", 0.0), reverse=True)
+
+    content_chunks    = [c for c in merged
+                         if c.get("source_type") == "public"
+                         and c.get("confidence_score", 0.0) >= _CONTENT_THRESHOLD]
+    style_only_chunks = [c for c in merged
+                         if c.get("source_type") == "public"
+                         and c.get("confidence_score", 0.0) < _CONTENT_THRESHOLD]
+    private_chunks    = [c for c in merged if c.get("source_type") == "private"]
+    live_chunks       = [c for c in merged if c.get("source_type") == "live"]
+
     logger.debug(
-        "Reranker: %d style + %d content + %d context + %d live → %d merged",
-        len(style_results), len(content_results),
-        len(context_results), len(live_results), after,
+        "Reranker: %d content + %d style_only + %d private + %d live (from %d merged)",
+        len(content_chunks), len(style_only_chunks),
+        len(private_chunks), len(live_chunks), after,
     )
-    return merged
+    return {
+        "content":    content_chunks,
+        "style_only": style_only_chunks,
+        "private":    private_chunks,
+        "live":       live_chunks,
+    }

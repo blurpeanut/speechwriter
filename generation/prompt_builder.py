@@ -4,9 +4,9 @@ Prompt builder — assembles the final augmented prompt sent to GPT-4o.
 Priority order when trimming for the 8,000-token budget:
   1. Brief (always kept in full)
   2. Private context chunks (highest signal for this specific speech)
-  3. Style exemplars (shape register and tone)
+  3. Content chunks — public, confidence >= 0.60 (factual use)
   4. Tavily live results (current facts)
-  5. Content precedents (lowest priority — cut first)
+  5. Style-only chunks — public, confidence < 0.60 (register reference only, no facts)
 
 Token counting uses a rough 4-chars-per-token heuristic to avoid a
 tiktoken dependency; the 8,000-token limit has a 20% safety margin.
@@ -120,49 +120,58 @@ def _trim_to_budget(sections: list[tuple[str, str]], budget: float) -> str:
 
 # ── Public API ─────────────────────────────────────────────────────────────────
 
-def build_prompt(brief: dict, retrieved_chunks: list[dict]) -> tuple[str, str]:
+def build_prompt(brief: dict, retrieved: dict) -> tuple[str, str]:
     """
     Assemble the system prompt and user message for GPT-4o.
 
     Args:
-        brief:            Speech brief dict (keys: speaker, event_name, date,
-                          audience, length, tone, key_messages).
-        retrieved_chunks: Merged, ranked list from the reranker.
+        brief:     Speech brief dict (keys: speaker, event_name, date,
+                   audience, length, tone, key_messages).
+        retrieved: Dict from reranker with keys content, style_only,
+                   private, live.
 
     Returns:
         (system_prompt, user_message) — both strings ready to pass to the LLM.
     """
-    # Separate chunks by source type
-    private_chunks = [c for c in retrieved_chunks if c.get("source_type") == "private"]
-    style_chunks   = [c for c in retrieved_chunks if c.get("source_type") == "public"]
-    live_chunks    = [c for c in retrieved_chunks if c.get("source_type") == "live"]
+    content_chunks    = retrieved.get("content",    [])
+    style_only_chunks = retrieved.get("style_only", [])
+    private_chunks    = retrieved.get("private",    [])
+    live_chunks       = retrieved.get("live",       [])
 
-    # Format each group
     def fmt_group(chunks, prefix):
         return "\n\n".join(
             _format_chunk(c, f"{prefix}{i+1}") for i, c in enumerate(chunks)
         )
 
-    brief_text    = _format_brief(brief)
-    private_text  = fmt_group(private_chunks, "PRIVATE")
-    style_text    = fmt_group(style_chunks,   "STYLE")
-    live_text     = fmt_group(live_chunks,    "LIVE")
+    brief_text      = _format_brief(brief)
+    private_text    = fmt_group(private_chunks,    "PRIVATE")
+    content_text    = fmt_group(content_chunks,    "CONTENT")
+    live_text       = fmt_group(live_chunks,       "LIVE")
+    style_only_text = fmt_group(style_only_chunks, "STYLEREF")
 
-    # Priority order: brief > private > style > live > (content already in style list)
+    style_only_section = (
+        "The following excerpts are provided for TONE AND REGISTER REFERENCE ONLY. "
+        "Do not extract factual claims from them. Use them only to calibrate sentence "
+        "rhythm, rhetorical structure, and PS register:\n\n"
+        + style_only_text
+    ) if style_only_text else ""
+
+    # Priority order: brief > private > content > live > style_only
     sections = [
-        ("SPEECH BRIEF",             brief_text),
+        ("SPEECH BRIEF", brief_text),
         ("PRIVATE CONTEXT (from uploaded documents — use these facts directly)",
-                                     private_text),
-        ("STYLE EXEMPLARS (match this register and tone)",
-                                     style_text),
+         private_text),
+        ("PUBLIC CONTENT (factual precedents from public corpus — cite these)",
+         content_text),
         ("LIVE SEARCH RESULTS (current statistics and announcements)",
-                                     live_text),
+         live_text),
+        ("TONE AND REGISTER REFERENCE ONLY — do not cite as facts",
+         style_only_section),
     ]
 
-    # Reserve the brief section fully; trim the rest to fit.
-    brief_block    = f"\n\n{'─'*60}\n{sections[0][0]}\n{'─'*60}\n{sections[0][1]}"
+    brief_block      = f"\n\n{'─'*60}\n{sections[0][0]}\n{'─'*60}\n{sections[0][1]}"
     remaining_budget = _MAX_CHARS - len(brief_block)
-    rest_block     = _trim_to_budget(sections[1:], remaining_budget)
+    rest_block       = _trim_to_budget(sections[1:], remaining_budget)
 
     user_message = brief_block + rest_block + (
         "\n\n" + "═" * 60 +
@@ -173,9 +182,10 @@ def build_prompt(brief: dict, retrieved_chunks: list[dict]) -> tuple[str, str]:
     total_chars = len(_SYSTEM_PROMPT) + len(user_message)
     logger.info(
         "Prompt built: ~%d tokens (%d chars). "
-        "Private: %d chunks, Style: %d chunks, Live: %d chunks.",
+        "Private: %d, Content: %d, Live: %d, StyleOnly: %d chunks.",
         total_chars // 4, total_chars,
-        len(private_chunks), len(style_chunks), len(live_chunks),
+        len(private_chunks), len(content_chunks),
+        len(live_chunks), len(style_only_chunks),
     )
 
     return _SYSTEM_PROMPT, user_message
